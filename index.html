@@ -379,6 +379,7 @@ const SLIDES = [
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-top:10px;font-family:var(--mono);">By continuing, you agree to receive occasional email communications</p>
   `, valid:()=>{
     let ok=true;
     [['firstName',v=>v.trim()!==''],['lastName',v=>v.trim()!==''],['email',v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)],['businessType',v=>v!=='']].forEach(([id,check])=>{
