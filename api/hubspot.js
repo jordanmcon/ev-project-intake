@@ -3,6 +3,10 @@
 // The token never leaves this server; it's injected from the HUBSPOT_TOKEN env variable.
 
 export default async function handler(req, res) {
+// Ensure body is parsed (Vercel should handle this, but be explicit)
+const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+const { email, properties } = body;
+  
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -12,8 +16,6 @@ export default async function handler(req, res) {
   if (!token) {
     return res.status(500).json({ error: 'HubSpot token not configured' });
   }
-
-  const { email, properties } = req.body;
 
   if (!email || !properties) {
     return res.status(400).json({ error: 'Missing email or properties' });
