@@ -1,6 +1,10 @@
 // api/hubspot.js — Vercel serverless function
-// Proxies HubSpot CRM upsert requests from the browser.
+// Proxies HubSpot CRM requests from the browser.
 // The token never leaves this server; it's injected from the HUBSPOT_TOKEN env variable.
+//
+// Required HubSpot token scopes:
+//   crm.objects.contacts.write  crm.objects.contacts.read
+//   crm.objects.deals.write     crm.objects.contacts.read
 
 export default async function handler(req, res) {
   // Allow CORS for browser requests
@@ -25,7 +29,7 @@ export default async function handler(req, res) {
 
   // Ensure body is parsed
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-  const { email, properties } = body || {};
+  const { email, properties, dealProperties } = body || {};
 
   if (!email || !properties) {
     return res.status(400).json({ error: 'Missing email or properties' });
@@ -37,7 +41,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    // Step 1: Search for existing contact by email
+    // ── Step 1: Search for existing contact by email ──────────────────────────
     const searchRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts/search', {
       method: 'POST',
       headers,
@@ -55,10 +59,12 @@ export default async function handler(req, res) {
 
     const searchData = await searchRes.json();
 
-    // Step 2: Update or create
+    // ── Step 2: Upsert contact ────────────────────────────────────────────────
+    let contactId;
     let apiRes;
+
     if (searchData.total > 0) {
-      const contactId = searchData.results[0].id;
+      contactId = searchData.results[0].id;
       apiRes = await fetch(`https://api.hubspot.com/crm/v3/objects/contacts/${contactId}`, {
         method: 'PATCH',
         headers,
@@ -74,11 +80,44 @@ export default async function handler(req, res) {
 
     if (!apiRes.ok) {
       const err = await apiRes.json().catch(() => ({}));
-      return res.status(apiRes.status).json({ error: err.message || 'HubSpot API error' });
+      return res.status(apiRes.status).json({ error: err.message || 'HubSpot contact API error' });
     }
 
-    const data = await apiRes.json();
-    return res.status(200).json(data);
+    const contactData = await apiRes.json();
+    contactId = contactId || contactData.id;
+
+    // ── Step 3: Create Deal (only when dealProperties are provided) ───────────
+    // dealProperties are only sent on the final quote submission, not step tracking.
+    if (dealProperties && contactId) {
+      const dealRes = await fetch('https://api.hubspot.com/crm/v3/objects/deals', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          properties: dealProperties,
+          associations: [
+            {
+              to: { id: contactId },
+              types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 3 }],
+            },
+          ],
+        }),
+      });
+
+      if (!dealRes.ok) {
+        // Log but don't fail the whole request — contact was already saved
+        const dealErr = await dealRes.json().catch(() => ({}));
+        console.error('Deal creation failed:', dealErr);
+        return res.status(200).json({
+          contact: contactData,
+          dealError: dealErr.message || 'Deal creation failed',
+        });
+      }
+
+      const dealData = await dealRes.json();
+      return res.status(200).json({ contact: contactData, deal: dealData });
+    }
+
+    return res.status(200).json(contactData);
 
   } catch (err) {
     console.error('Proxy error:', err);
