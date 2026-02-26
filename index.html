@@ -814,7 +814,7 @@ async function showQuote(){
 
 function renderQuote(){
   const p=calcPricing();
-  const rLabels={'revenue-loss':'Losing EV traffic revenue','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance / grants'};
+  const rLabels={'revenue-loss':'Losing EV traffic revenue','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance'};
   const btLabel={none:'None','125kw':'125 kW System ($80K)','250kw':'250 kW System ($160K)'}[S.battery]||'—';
   const budgetLabel={allocated:'Capital allocated',financed:'Financing / subscription'}[S.budget]||'—';
   const startLabel=S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
@@ -912,10 +912,7 @@ function renderQuote(){
       <div><div class="q-note-title">Financing & Subscription Options Available</div><div class="q-note-body">You indicated interest in a financed or subscription structure. Our team will follow up with OpEx and PPA options based on your site profile.</div></div>
     </div>`:''}
 
-    <div class="q-note">
-      
-      <div><div class="q-note-title">Next Steps</div><div class="q-note-body">An Electric Era account executive will reach out within 1 business day to schedule a site assessment and finalize your proposal. Section 48E tax credits and grant eligibility are not reflected above and may significantly reduce your net investment.</div></div>
-    </div>
+  
 
     <div class="q-sec">
       <div class="q-sec-title">Project Timeline</div>
@@ -923,6 +920,11 @@ function renderQuote(){
         <p style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--mono);">Estimated schedule starting ${startLabel}. All durations are illustrative and subject to site-specific conditions.</p>
         ${buildGantt(S.startDate)}
       </div>
+    </div>
+
+  <div class="q-note">
+      
+      <div><div class="q-note-title">Next Steps</div><div class="q-note-body">An Electric Era representative will reach out shortly to kick off a site assessment, site design, and finalize your proposal. Note that Section 48E tax credits and grant eligibility are not reflected above and may significantly reduce your net investment.</div></div>
     </div>
 
     <div class="q-actions">
