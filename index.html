@@ -55,7 +55,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .eyebrow::before{content:'';width:16px;height:1px;background:var(--gold);opacity:.7}
 .slide h1{font-size:clamp(28px,3.8vw,38px);font-weight:600;line-height:1.18;letter-spacing:-.025em;margin-bottom:7px}
 .slide h1 em{font-style:normal;color:var(--gold)}
-.slide .sub{font-size:1.02rem;color:var(--dim);line-height:1.65;margin-bottom:26px;max-width:480px}
+.slide .sub{font-size:1.02rem;color:var(--dim);line-height:1.4;margin-bottom:26px;max-width:480px}
 
 /* CHOICE CARDS */
 .choices{display:flex;flex-direction:column;gap:7px}
@@ -71,7 +71,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .ci{font-size:1.02rem;min-width:20px;margin-top:1px;flex-shrink:0;position:relative;z-index:1}
 .cb{flex:1;position:relative;z-index:1}
 .ct{font-size:1.rem;font-weight:500;color:var(--text);line-height:1.3}
-.cd{font-size:0.9rem;color:var(--muted);margin-top:2px;line-height:1.4}
+.cd{font-size:0.9rem;color:var(--muted);margin-top:2px;line-height:1.3}
 
 /* CHECK CARDS */
 .checks{display:flex;flex-direction:column;gap:7px}
@@ -113,7 +113,7 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.18)}
 .battery-choices{display:flex;flex-direction:column;gap:7px}
 .battery-chart-box{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:16px}
 .bchart-title{font-size:1.1rem;font-weight:600;color:var(--text);margin-bottom:5px}
-.bchart-sub{font-size:1.02rem;color:var(--muted);line-height:1.5;margin-bottom:12px}
+.bchart-sub{font-size:1.02rem;color:var(--muted);line-height:1.4;margin-bottom:12px}
 .bchart-wrap{position:relative;width:100%;height:170px}
 canvas#bChart{width:100%!important;height:170px!important}
 .bchart-link{font-size:1.02rem;color:var(--gold);text-decoration:underline;cursor:pointer;margin-top:9px;display:inline-block;font-family:var(--mono)}
@@ -399,13 +399,11 @@ const SLIDES = [
   // 3 — SITE + STALLS + BUDGET
   { step:1, render:()=>`
     <div class="eyebrow">Step 1 — Project Intake</div>
-    <h1>About your <em>project site</em>.</h1>
-    <p class="sub">Tell us where and how big.</p>
+    <h1>Tell us about your <em>project site</em>.</h1>
     <div class="field"><label>Project site address (include city, state)</label><input type="text" id="siteAddress" placeholder="123 Main St, Seattle, WA" value="${S.siteAddress}" oninput="S.siteAddress=this.value"><div class="ferr" id="e-siteAddress">Required</div></div>
     <div class="field" style="margin-bottom:22px;">
-      <label># of stalls</label>
+      <label>Estimated # of stalls</label>
       <div class="stall-display" id="stall-num">${S.stalls}</div>
-      <div class="stall-unit">DC fast charging stalls</div>
       <input type="range" id="stall-range" min="1" max="32" value="${S.stalls}" oninput="S.stalls=+this.value;document.getElementById('stall-num').textContent=this.value;trackRange(this)">
       <div class="range-labels"><span>1</span><span>8</span><span>16</span><span>24</span><span>32</span></div>
     </div>
@@ -448,8 +446,8 @@ const SLIDES = [
         <div class="battery-choices">
           ${[
             ['none','','No battery','Direct grid connection'],
-            ['125kw','','125 kW Battery','Best for moderate demand charges ($5–$14/kW)'],
-            ['250kw','','250 kW Battery','Best for high utilization or high demand charges ($14+/kW)'],
+            ['125kw','','125 kW Battery','Best for moderate demand charges ($5–$14/kW/month)'],
+            ['250kw','','250 kW Battery','Best for high utilization or high demand charges ($14+/kW/month)'],
           ].map(([v,icon,t,d],i)=>`
             <div class="choice ${S.battery===v?'sel':''}" onclick="pickBattery('${v}',this)" style="padding:12px 14px;">
               <div class="ck">${String.fromCharCode(65+i)}</div><div class="ci">${icon}</div>
@@ -477,8 +475,8 @@ const SLIDES = [
     <p class="sub">An EV fast charge creates 20–40 minutes of captive engagement. Select all the programs you want to activate at the charger.</p>
     <div class="checks g2" style="margin-bottom:8px;">
       ${[
-        ['rmn','','Retail Media Network','Ad revenue from charger screens + higher in-store conversion from ad-exposed drivers'],
-        ['loyalty','','Loyalty Program','Net-new loyalty signups at the charger + incremental store visits from members'],
+        ['rmn','','Retail Media Network','Ad revenue from premium charger screen impressions + higher in-store conversion from ad-exposed drivers'],
+        ['loyalty','','Loyalty Program','New loyalty signups at the charger + incremental store visits from loyal customers'],
         ['membership','','Membership Program','New paid memberships and upgrades + incremental member visits year-round'],
       ].map(([v,icon,t,sub])=>`
         <div class="check-card ${S.retailPrograms.includes(v)?'sel':''}" onclick="toggleRetail('${v}',this)">
