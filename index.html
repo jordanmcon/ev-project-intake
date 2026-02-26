@@ -36,9 +36,9 @@ html,body{height:100%;font-family:var(--font);font-size:1.02rem;background:var(-
 header{display:flex;align-items:center;justify-content:space-between;padding:16px 36px;border-bottom:1px solid var(--border);flex-shrink:0}
 .logo{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--text);text-decoration:none;letter-spacing:-.01em}
 .logo-bolt{width:28px;height:28px;background:var(--gold);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#09080A}
-.prog-wrap{display:flex;align-items:center;gap:12px}
+.prog-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1}
 .prog-lbl{font-size:11px;font-family:var(--mono);letter-spacing:.07em;color:var(--muted)}
-.prog-track{width:150px;height:2px;background:var(--s3);border-radius:99px;overflow:hidden}
+.prog-track{width:260px;height:2px;background:var(--s3);border-radius:99px;overflow:hidden}
 .prog-bar{height:100%;background:var(--gold);border-radius:99px;transition:width .55s cubic-bezier(.4,0,.2,1);box-shadow:0 0 7px rgba(248,185,24,.55)}
 
 /* STAGE */
@@ -563,8 +563,9 @@ function go(idx){
 function updateProgress(){
   const step=SLIDES[cur].step;
   const pct={1:20,2:40,3:60,4:80};
-  document.getElementById('prog-bar').style.width=(pct[step]||20)+'%';
-  document.getElementById('prog-lbl').textContent=`Step ${step} of 5`;
+  const p=pct[step]||20;
+  document.getElementById('prog-bar').style.width=p+'%';
+  document.getElementById('prog-lbl').textContent=p+'% complete';
   // Map slide index to dot index (steps 1,1,1,1,2,3,4 → dots 0,0,0,0,1,2,3)
   const dotIdx=step-1;
   document.querySelectorAll('.dot').forEach((d,i)=>{
