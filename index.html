@@ -660,7 +660,7 @@ function drawBatteryChart(){
 
 // ── HUBSPOT CONFIG ────────────────────────────────────────────
 const HS = {
-  accessToken: 'YOUR_PRIVATE_APP_TOKEN_HERE',
+  proxyUrl: '/api/hubspot', // Vercel serverless proxy — token lives server-side
 };
 
 // ── HUBSPOT SUBMIT ────────────────────────────────────────────
@@ -699,7 +699,6 @@ async function submitToHubSpot() {
   const properties = {
     firstname:            S.firstName,
     lastname:             S.lastName,
-    email:                S.email,
     business_type:        bizMap[S.businessType] || S.businessType,
     location_of_interest: S.siteAddress,
     number_of_stalls:     String(S.stalls),
@@ -711,52 +710,17 @@ async function submitToHubSpot() {
     cpq_furthest_step:                '4',
   };
 
-  // Upsert: search by email first, then create or update
-  const searchRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts/search', {
+  const res = await fetch(HS.proxyUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${HS.accessToken}`,
-    },
-    body: JSON.stringify({
-      filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: S.email }] }],
-      properties: ['email'],
-      limit: 1,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: S.email, properties }),
   });
 
-  if (!searchRes.ok) throw new Error(`HubSpot search failed: ${searchRes.status}`);
-  const searchData = await searchRes.json();
-
-  let apiRes;
-  if (searchData.total > 0) {
-    // Contact exists — update
-    const contactId = searchData.results[0].id;
-    apiRes = await fetch(`https://api.hubspot.com/crm/v3/objects/contacts/${contactId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${HS.accessToken}`,
-      },
-      body: JSON.stringify({ properties }),
-    });
-  } else {
-    // New contact — create
-    apiRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${HS.accessToken}`,
-      },
-      body: JSON.stringify({ properties }),
-    });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.error || `Proxy error: ${res.status}`);
   }
-
-  if (!apiRes.ok) {
-    const errBody = await apiRes.json().catch(() => ({}));
-    throw new Error(errBody.message || `HubSpot API error: ${apiRes.status}`);
-  }
-  return await apiRes.json();
+  return await res.json();
 }
 
 // ── STEP TRACKING ────────────────────────────────────────────
@@ -765,30 +729,11 @@ async function submitToHubSpot() {
 async function trackStep(n) {
   if (!S.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(S.email)) return;
   try {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${HS.accessToken}`,
-    };
-    const searchRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts/search', {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: S.email }] }],
-        properties: ['email'], limit: 1,
-      }),
+    await fetch(HS.proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: S.email, properties: { cpq_furthest_step: String(n) } }),
     });
-    if (!searchRes.ok) return;
-    const searchData = await searchRes.json();
-    const properties = { cpq_furthest_step: String(n) };
-    if (searchData.total > 0) {
-      await fetch(`https://api.hubspot.com/crm/v3/objects/contacts/${searchData.results[0].id}`, {
-        method: 'PATCH', headers, body: JSON.stringify({ properties }),
-      });
-    } else {
-      await fetch('https://api.hubspot.com/crm/v3/objects/contacts', {
-        method: 'POST', headers,
-        body: JSON.stringify({ properties: { ...properties, email: S.email } }),
-      });
-    }
   } catch(err) {
     console.error('trackStep error:', err);
   }
