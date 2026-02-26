@@ -384,7 +384,7 @@ const SLIDES = [
     [['firstName',v=>v.trim()!==''],['lastName',v=>v.trim()!==''],['email',v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)],['businessType',v=>v!=='']].forEach(([id,check])=>{
       const el=document.getElementById(id),err=document.getElementById('e-'+id),valid=el&&check(el.value);
       if(el)el.classList.toggle('inv',!valid);if(err)err.style.display=valid?'none':'block';if(!valid)ok=false;
-    });return ok;
+    });if(ok)trackStep(1);return ok;
   }},
 
   // 3 — SITE + STALLS + BUDGET
@@ -458,7 +458,7 @@ const SLIDES = [
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
   `,
-    valid:()=>{ if(S.battery===null){toast('Please select a battery option.');return false;} return true; }
+    valid:()=>{ if(S.battery===null){toast('Please select a battery option.');return false;} trackStep(2); return true; }
   },
 
   // 5 — RETAIL PROGRAMS
@@ -486,7 +486,7 @@ const SLIDES = [
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
-  `, valid:()=>{ if(!S.retailPrograms.length){toast('Please make a selection.');return false;} return true; } },
+  `, valid:()=>{ if(!S.retailPrograms.length){toast('Please make a selection.');return false;} trackStep(3); return true; } },
 
   // 6 — SUMMARY + ADD-ONS
   { step:4, render:()=>{
@@ -708,6 +708,7 @@ async function submitToHubSpot() {
     cpq_test_budget:                  budgetMap[S.budget] || S.budget,
     cpq_retail_question:              activeRetail.map(r => retailMap[r] || r).join(';'),
     cpq_test_battery:                 batteryMap[S.battery] || '',
+    cpq_furthest_step:                '4',
   };
 
   // Upsert: search by email first, then create or update
@@ -758,7 +759,42 @@ async function submitToHubSpot() {
   return await apiRes.json();
 }
 
-// ── QUOTE ────────────────────────────────────────────────────
+// ── STEP TRACKING ────────────────────────────────────────────
+// Fire-and-forget: silently upserts contact with cpq_furthest_step.
+// Only runs if we have a valid email.
+async function trackStep(n) {
+  if (!S.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(S.email)) return;
+  try {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${HS.accessToken}`,
+    };
+    const searchRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts/search', {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: S.email }] }],
+        properties: ['email'], limit: 1,
+      }),
+    });
+    if (!searchRes.ok) return;
+    const searchData = await searchRes.json();
+    const properties = { cpq_furthest_step: String(n) };
+    if (searchData.total > 0) {
+      await fetch(`https://api.hubspot.com/crm/v3/objects/contacts/${searchData.results[0].id}`, {
+        method: 'PATCH', headers, body: JSON.stringify({ properties }),
+      });
+    } else {
+      await fetch('https://api.hubspot.com/crm/v3/objects/contacts', {
+        method: 'POST', headers,
+        body: JSON.stringify({ properties: { ...properties, email: S.email } }),
+      });
+    }
+  } catch(err) {
+    console.error('trackStep error:', err);
+  }
+}
+
+
 async function showQuote(){
   if(!S.startDate){toast('Please select a start date.');return;}
 
