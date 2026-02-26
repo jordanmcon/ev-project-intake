@@ -734,12 +734,25 @@ async function submitToHubSpot() {
     'allocated': 'I have allocated capital for EV charging',
     'financed':  'I need a financed option or subscription',
   };
-  const batteryMap = {
+  // Contact battery map (existing field)
+  const batteryMapContact = {
     'none':  'No battery',
     '125kw': '125kW battery',
     '250kw': '250kW battery',
   };
-  const retailMap = {
+  // Deal battery map — must match HubSpot enumeration values exactly
+  const batteryMapDeal = {
+    'none':  'None',
+    '125kw': '125 kW Battery',
+    '250kw': '250 kW Battery',
+  };
+  // Deal retail map — must match HubSpot enumeration values exactly
+  const retailMapDeal = {
+    'rmn':        'Retail media network',
+    'loyalty':    'Loyalty',
+    'membership': 'Membership',
+  };
+  const retailMapContact = {
     'rmn':        'Retail media network',
     'loyalty':    'Loyalty',
     'membership': 'Membership',
@@ -753,25 +766,42 @@ async function submitToHubSpot() {
   };
 
   const activeRetail = S.retailPrograms.filter(p => p !== 'none');
+  const pricing = calcPricing();
 
+  // ── Contact properties (existing) ────────────────────────────────────────
   const properties = {
     firstname:            S.firstName,
     lastname:             S.lastName,
     business_type:        bizMap[S.businessType] || S.businessType,
     location_of_interest: S.siteAddress,
     number_of_stalls:     String(S.stalls),
-    // CPQ custom properties
     cpq_test_why_install_ev_charging: S.reasons.map(r => reasonMap[r] || r).join(';'),
     cpq_test_budget:                  budgetMap[S.budget] || S.budget,
-    cpq_retail_question:              activeRetail.map(r => retailMap[r] || r).join(';'),
-    cpq_test_battery:                 batteryMap[S.battery] || '',
+    cpq_retail_question:              activeRetail.map(r => retailMapContact[r] || r).join(';'),
+    cpq_test_battery:                 batteryMapContact[S.battery] || '',
     cpq_furthest_step:                '4',
+  };
+
+  // ── Deal properties ───────────────────────────────────────────────────────
+  // Pipeline: "CPQ Test" (875089784), Stage: "Identified" (1128525596)
+  const dealProperties = {
+    dealname:                    `${S.firstName} ${S.lastName} — EV Charging Quote`,
+    pipeline:                    '875089784',
+    dealstage:                   '1128525596',
+    amount:                      String(pricing.subtotal),
+    number_of_stalls:            String(S.stalls),
+    cpq_retail_question:         activeRetail.map(r => retailMapDeal[r] || r).join(';'),
+    cpq_test_battery:            batteryMapDeal[S.battery] || 'None',
+    cpq_design_services:         String(S.addDesign),
+    cpq_epc_management:          String(S.addEPC),
+    cpq_construction_management: String(S.addConstruction),
+    cpq_estimated_total_investment: String(pricing.subtotal),
   };
 
   const res = await fetch(HS.proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: S.email, properties }),
+    body: JSON.stringify({ email: S.email, properties, dealProperties }),
   });
 
   if (!res.ok) {
