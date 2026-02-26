@@ -658,9 +658,123 @@ function drawBatteryChart(){
   ctx.save();ctx.translate(9,pt+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('Sessions Per Day',0,0);ctx.restore();
 }
 
+// ── HUBSPOT CONFIG ────────────────────────────────────────────
+const HS = {
+  accessToken: 'YOUR_PRIVATE_APP_TOKEN_HERE',
+};
+
+// ── HUBSPOT SUBMIT ────────────────────────────────────────────
+async function submitToHubSpot() {
+  // Value maps: internal keys → HubSpot display strings
+  const reasonMap = {
+    'revenue-loss': 'Losing revenue from EV traffic going elsewhere',
+    'competitive':  'Competitive pressure',
+    'brand':        'Brand modernization',
+    'compliance':   'Compliance (EV mandates, grants, other need)',
+  };
+  const budgetMap = {
+    'allocated': 'I have allocated capital for EV charging',
+    'financed':  'I need a financed option or subscription',
+  };
+  const batteryMap = {
+    'none':  'No battery',
+    '125kw': '125kW battery',
+    '250kw': '250kW battery',
+  };
+  const retailMap = {
+    'rmn':        'Retail media network',
+    'loyalty':    'Loyalty',
+    'membership': 'Membership',
+  };
+  const bizMap = {
+    'business-owner': 'Business owner',
+    'cpo':            'Charge point operator',
+    'distributor':    'Distributor',
+    'vendor':         'Vendor',
+    'other':          'Other',
+  };
+
+  const activeRetail = S.retailPrograms.filter(p => p !== 'none');
+
+  const properties = {
+    firstname:            S.firstName,
+    lastname:             S.lastName,
+    email:                S.email,
+    business_type:        bizMap[S.businessType] || S.businessType,
+    location_of_interest: S.siteAddress,
+    number_of_stalls:     String(S.stalls),
+    // CPQ custom properties
+    cpq_test_why_install_ev_charging: S.reasons.map(r => reasonMap[r] || r).join(';'),
+    cpq_test_budget:                  budgetMap[S.budget] || S.budget,
+    cpq_retail_question:              activeRetail.map(r => retailMap[r] || r).join(';'),
+    cpq_test_battery:                 batteryMap[S.battery] || '',
+  };
+
+  // Upsert: search by email first, then create or update
+  const searchRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${HS.accessToken}`,
+    },
+    body: JSON.stringify({
+      filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: S.email }] }],
+      properties: ['email'],
+      limit: 1,
+    }),
+  });
+
+  if (!searchRes.ok) throw new Error(`HubSpot search failed: ${searchRes.status}`);
+  const searchData = await searchRes.json();
+
+  let apiRes;
+  if (searchData.total > 0) {
+    // Contact exists — update
+    const contactId = searchData.results[0].id;
+    apiRes = await fetch(`https://api.hubspot.com/crm/v3/objects/contacts/${contactId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${HS.accessToken}`,
+      },
+      body: JSON.stringify({ properties }),
+    });
+  } else {
+    // New contact — create
+    apiRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${HS.accessToken}`,
+      },
+      body: JSON.stringify({ properties }),
+    });
+  }
+
+  if (!apiRes.ok) {
+    const errBody = await apiRes.json().catch(() => ({}));
+    throw new Error(errBody.message || `HubSpot API error: ${apiRes.status}`);
+  }
+  return await apiRes.json();
+}
+
 // ── QUOTE ────────────────────────────────────────────────────
-function showQuote(){
+async function showQuote(){
   if(!S.startDate){toast('Please select a start date.');return;}
+
+  // Show loading state on the button
+  const btn = document.querySelector('[onclick="validateAndShowQuote()"]');
+  if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
+
+  try {
+    await submitToHubSpot();
+  } catch(err) {
+    console.error('HubSpot submission error:', err);
+    if(btn){ btn.disabled=false; btn.innerHTML='Generate My Quote <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
+    toast('Could not submit to HubSpot: ' + err.message);
+    return; // Block — do not show quote
+  }
+
   S.quoteId='EE-'+Date.now().toString(36).toUpperCase().slice(-6);
   S.quoteDate=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   window.location.hash='quote';
@@ -784,7 +898,8 @@ function renderQuote(){
     </div>
 
     <div class="q-actions">
-      <button class="btn btn-primary" onclick="window.print()">Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <a class="btn btn-primary" href="https://hubspot.electriceratechnologies.com/hs/payments/fjWmg7tfgXqrWypJ?referrer=PAYMENT_LINK" target="_blank">Reserve Now <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      <button class="btn btn-ghost" onclick="window.print()">Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="restart()">Start over</button>
     </div>
     <div class="q-disclaimer">This estimate is for planning purposes only and is not a binding offer. Final pricing is subject to site survey, utility assessment, and hardware availability. Quote valid for 30 days from generation date.</div>
