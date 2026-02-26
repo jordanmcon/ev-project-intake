@@ -4,9 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Electric Era — Configure Your Charging Project</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Haffer — self-hosted. Place font files in a /fonts/ folder next to this file.
+   Required files (from the Haffer WEB folder):
+     fonts/Haffer-Light.woff2, fonts/Haffer-Regular.woff2,
+     fonts/Haffer-Medium.woff2, fonts/Haffer-SemiBold.woff2, fonts/Haffer-Bold.woff2 */
+@font-face { font-family:'Haffer'; src:url('fonts/Haffer-Light.woff2') format('woff2'); font-weight:300; font-display:swap; }
+@font-face { font-family:'Haffer'; src:url('fonts/Haffer-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+@font-face { font-family:'Haffer'; src:url('fonts/Haffer-Medium.woff2') format('woff2'); font-weight:500; font-display:swap; }
+@font-face { font-family:'Haffer'; src:url('fonts/Haffer-SemiBold.woff2') format('woff2'); font-weight:600; font-display:swap; }
+@font-face { font-family:'Haffer'; src:url('fonts/Haffer-Bold.woff2') format('woff2'); font-weight:700; font-display:swap; }
+</style>
 <style>
 :root {
   --gold: #F8B918;
@@ -22,8 +31,8 @@
   --muted: rgba(240,238,243,0.42);
   --dim: rgba(240,238,243,0.66);
   --r: 11px;
-  --font: 'DM Sans', sans-serif;
-  --mono: 'DM Mono', monospace;
+  --font: 'Haffer', 'DM Sans', sans-serif;
+  --mono: 'Haffer', 'DM Sans', sans-serif;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:var(--font);font-size:1.02rem;background:var(--bg);color:var(--text);overflow:hidden}
@@ -42,11 +51,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .prog-bar{height:100%;background:var(--gold);border-radius:99px;transition:width .55s cubic-bezier(.4,0,.2,1);box-shadow:0 0 7px rgba(248,185,24,.55)}
 
 /* STAGE */
-.stage{flex:1;display:flex;align-items:center;justify-content:center;padding:28px 36px;overflow:hidden;position:relative}
+.stage{flex:1;display:flex;align-items:center;justify-content:center;padding:28px 36px;overflow-y:auto;overflow-x:hidden;position:relative}
 .stage::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 55% 50% at 50% 105%,rgba(248,185,24,.05) 0%,transparent 70%);pointer-events:none}
 
 /* SLIDES */
-.slide{width:100%;max-width:900px;animation:sUp .4s cubic-bezier(.4,0,.2,1) both}
+.slide{width:100%;max-width:900px;animation:sUp .4s cubic-bezier(.4,0,.2,1) both;align-self:flex-start;margin:auto}
 .slide.out{animation:sDown .25s cubic-bezier(.4,0,.2,1) both}
 @keyframes sUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
 @keyframes sDown{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-16px)}}
@@ -232,7 +241,7 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
   header,footer{padding:14px 18px}
   .stage{padding:20px 18px}
   .choices.g2,.checks.g2,.sum-grid,.q-info-grid,.date-grid,.battery-layout,.g2f{grid-template-columns:1fr}
-  .prog-track{width:100px}
+  .prog-track{width:160px}
   .q-wrap{padding:32px 18px 60px}
   .q-head{flex-direction:column}
   .q-meta{text-align:left}
@@ -268,14 +277,14 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
   </g>
   <path class="st0" d="M155.38,135c0,5.26-4.27,9.52-9.55,9.52s-9.55-4.26-9.55-9.52,4.27-9.52,9.55-9.52,9.55,4.26,9.55,9.52ZM184.62,135c0,5.26,4.27,9.52,9.55,9.52s9.55-4.26,9.55-9.52-4.27-9.52-9.55-9.52c-5.27,0-9.55,4.26-9.55,9.52ZM205,90h-23.35l-9.84,17.03h33.19c16.99,0,27.97,10.98,27.97,27.97s-10.98,27.97-27.97,27.97h-17.14l-9.84,17.03h26.98c26.4,0,45-18.6,45-45s-18.6-45-45-45ZM135,162.97c-16.99,0-27.97-10.98-27.97-27.97s10.98-27.97,27.97-27.97h17.14l9.84-17.03h-26.98c-26.4,0-45,18.6-45,45s18.6,45,45,45h23.35l9.84-17.03h-33.19Z"/>
 </svg></a>
-    <div class="prog-wrap">
-      <span class="prog-lbl" id="prog-lbl">Step 1 of 5</span>
-      <div class="prog-track"><div class="prog-bar" id="prog-bar" style="width:20%"></div></div>
-    </div>
   </header>
   <main class="stage" id="stage"></main>
   <footer>
     <div class="dots" id="dots"></div>
+    <div class="prog-wrap">
+      <div class="prog-track"><div class="prog-bar" id="prog-bar" style="width:20%"></div></div>
+      <span class="prog-lbl" id="prog-lbl">20% complete</span>
+    </div>
     <div class="foot-hint">Press <kbd>↵</kbd> to continue</div>
   </footer>
 </div>
@@ -809,6 +818,7 @@ async function showQuote(){
   const qp=document.getElementById('quote-page');qp.classList.add('on');
   document.getElementById('q-wrap').innerHTML=renderQuote();
   document.getElementById('prog-bar').style.width='100%';
+  document.getElementById('prog-lbl').textContent='100% complete';
 }
 
 function renderQuote(){
