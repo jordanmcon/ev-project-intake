@@ -3,10 +3,16 @@
 // The token never leaves this server; it's injected from the HUBSPOT_TOKEN env variable.
 
 export default async function handler(req, res) {
-// Ensure body is parsed (Vercel should handle this, but be explicit)
-const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-const { email, properties } = body;
-  
+  // Allow CORS for browser requests
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -16,6 +22,10 @@ const { email, properties } = body;
   if (!token) {
     return res.status(500).json({ error: 'HubSpot token not configured' });
   }
+
+  // Ensure body is parsed
+  const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  const { email, properties } = body || {};
 
   if (!email || !properties) {
     return res.status(400).json({ error: 'Missing email or properties' });
