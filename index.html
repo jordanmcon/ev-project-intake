@@ -770,9 +770,6 @@ async function showQuote(){
     await submitToHubSpot();
   } catch(err) {
     console.error('HubSpot submission error:', err);
-    if(btn){ btn.disabled=false; btn.innerHTML='Generate My Quote <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
-    toast('Could not submit to HubSpot: ' + err.message);
-    return; // Block — do not show quote
   }
 
   S.quoteId='EE-'+Date.now().toString(36).toUpperCase().slice(-6);
