@@ -98,7 +98,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .chk-sub{font-size:1.02rem;color:var(--muted);margin-top:2px;line-height:1.4}
 
 /* FORM */
-.field{margin-bottom:14px}
+.field{margin-top: 14px; margin-bottom:14px}
 .field label{display:block;font-size:0.8rem;font-weight:500;color:var(--dim);margin-bottom:5px;letter-spacing:.02em;text-transform:uppercase}
 input[type=text],input[type=email],select{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;font-size:1.02rem;font-family:var(--font);color:var(--text);outline:none;transition:border-color .17s,box-shadow .17s;appearance:none}
 input:focus,select:focus{border-color:var(--gold-border);box-shadow:0 0 0 3px var(--gold-glow)}
@@ -357,6 +357,7 @@ const SLIDES = [
         ['competitive','','Competitive pressure','Peers and competitors are already deploying'],
         ['brand','','Brand modernization','Align your brand with sustainability and innovation'],
         ['compliance','','Compliance (e.g., EV mandates)','Regulatory need such as a building code mandate'],
+        ['other','','Other',''],
       ].map(([v,icon,t,sub])=>`
         <div class="check-card ${S.reasons.includes(v)?'sel':''}" onclick="toggleArr('reasons','${v}',this)">
           <div class="chkbox">${S.reasons.includes(v)?'✓':''}</div>
@@ -536,13 +537,13 @@ const SLIDES = [
       </div>
     </div>
     <div id="addon-err" style="display:none;font-size:0.82rem;color:#f87171;font-family:var(--mono);margin-top:6px;">&#8593; Please make a selection above before continuing.</div>
-    <div class="sec-label">Ideal Start Date</div>
+    <div class="sec-label">Ideal Completion Date</div>
     <div class="date-grid">${makeDatePills()}</div>
     <div class="cta-row">
       <button class="btn btn-primary" onclick="validateAndShowQuote()">Generate My Quote <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>`;
-  }, valid:()=>{ if(!S.startDate){toast('Please select a start date.');return false;} return true; } },
+  }, valid:()=>{ if(!S.startDate){toast('Please select a completion date.');return false;} return true; } },
 ];
 
 // ── NAV ──────────────────────────────────────────────────────
@@ -550,7 +551,7 @@ let cur = 0;
 function next(){ const s=SLIDES[cur]; if(s.valid&&!s.valid())return; if(cur<SLIDES.length-1)go(cur+1); }
 function prev(){ if(cur>0)go(cur-1); }
 function validateAndShowQuote(){
-  if(!S.startDate){ toast('Please select a start date.'); return; }
+  if(!S.startDate){ toast('Please select a completion date.'); return; }
   if(!S.addDesign && !S.addEPC && !S.addConstruction && !S.addNone){
     const err=document.getElementById('addon-err');
     if(err){ err.style.display='block'; err.scrollIntoView({behavior:'smooth',block:'center'}); }
@@ -641,7 +642,7 @@ function selectDate(val,el){
 }
 function makeDatePills(){
   const now=new Date();let h='';
-  for(let i=1;i<=6;i++){
+  for(let i=4;i<=9;i++){
     const d=new Date(now.getFullYear(),now.getMonth()+i,1);
     const mo=d.toLocaleString('default',{month:'short'}),yr=d.getFullYear(),full=d.toLocaleString('default',{month:'long'});
     const val=`${yr}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -729,6 +730,7 @@ async function submitToHubSpot() {
     'competitive':  'Competitive pressure',
     'brand':        'Brand modernization',
     'compliance':   'Compliance (e.g., EV mandates)',
+    'other':        'Other',
   };
   const budgetMap = {
     'allocated': 'I have allocated capital for EV charging',
@@ -835,7 +837,7 @@ async function trackStep(n) {
 
 
 async function showQuote(){
-  if(!S.startDate){toast('Please select a start date.');return;}
+  if(!S.startDate){toast('Please select a completion date.');return;}
 
   // Generate quote ID first so it can be sent to HubSpot
   S.quoteId='EE-'+Date.now().toString(36).toUpperCase().slice(-6);
@@ -860,7 +862,7 @@ async function showQuote(){
 
 function renderQuote(){
   const p=calcPricing();
-  const rLabels={'revenue-loss':'Losing EV traffic revenue','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance'};
+  const rLabels={'revenue-loss':'Losing EV traffic revenue','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance','other':'Other'};
   const btLabel={none:'None','125kw':'125 kW System ($80K)','250kw':'250 kW System ($160K)'}[S.battery]||'—';
   const budgetLabel={allocated:'Capital allocated',financed:'Financing / subscription'}[S.budget]||'—';
   const startLabel=S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
@@ -920,7 +922,7 @@ function renderQuote(){
         <div class="q-info-card"><div class="qi-label">Site Address</div><div class="qi-val">${S.siteAddress||'—'}</div></div>
         <div class="q-info-card"><div class="qi-label">Primary Reasons</div><div class="qi-val">${S.reasons.map(r=>rLabels[r]).join(', ')||'—'}</div></div>
         <div class="q-info-card"><div class="qi-label">Budget Approach</div><div class="qi-val">${budgetLabel}</div></div>
-        <div class="q-info-card"><div class="qi-label">Target Start</div><div class="qi-val">${startLabel}</div></div>
+        <div class="q-info-card"><div class="qi-label">Target Completion</div><div class="qi-val">${startLabel}</div></div>
       </div>
     </div>
 
@@ -970,7 +972,14 @@ function renderQuote(){
 
   <div class="q-note">
       
-      <div><div class="q-note-title">Next Steps</div><div class="q-note-body">An Electric Era representative will reach out shortly to kick off a site assessment, site design, and finalize your proposal. Note that Section 48E tax credits and grant eligibility are not reflected above and may significantly reduce your net investment.</div></div>
+      <div><div class="q-note-title">Next Steps</div><div class="q-note-body">
+      <ul>
+      <li>An Electric Era representative will reach out shortly to kick off a site assessment</li>
+      <li> An Electric Era engineer will be assigned to create a site layout</li>
+      <li> Bullet 3 </li>
+      <li> Bullet 4 </li>
+      </ul>
+     <p> Note that Section 48E tax credits and grant eligibility are not reflected above and may significantly reduce your net investment.</p></div></div>
     </div>
 
     <div class="q-actions">
