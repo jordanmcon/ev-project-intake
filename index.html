@@ -795,7 +795,7 @@ async function submitToHubSpot() {
     cpq_design_services:         String(S.addDesign),
     cpq_epc_management:          String(S.addEPC),
     cpq_construction_management: String(S.addConstruction),
-    cpq_estimated_total_investment: String(pricing.subtotal),
+    cpw_estimated_total_investment: String(pricing.subtotal),
   };
 
   const res = await fetch(HS.proxyUrl, {
