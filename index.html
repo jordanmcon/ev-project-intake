@@ -808,7 +808,11 @@ async function submitToHubSpot() {
     const errBody = await res.json().catch(() => ({}));
     throw new Error(errBody.error || `Proxy error: ${res.status}`);
   }
-  return await res.json();
+  const result = await res.json();
+  // Log any deal-specific errors for debugging (contact still saved)
+  if (result.dealError) console.error('Deal error:', result.dealError);
+  if (result.associationError) console.warn('Association error:', result.associationError);
+  return result;
 }
 
 // ── STEP TRACKING ────────────────────────────────────────────
