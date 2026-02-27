@@ -785,7 +785,7 @@ async function submitToHubSpot() {
   // ── Deal properties ───────────────────────────────────────────────────────
   // Pipeline: "CPQ Test" (875089784), Stage: "Identified" (1128525596)
   const dealProperties = {
-    dealname:                    `${S.firstName} ${S.lastName} — EV Charging Quote`,
+    dealname:                    `${S.firstName} ${S.lastName} — ${S.siteAddress}`,
     pipeline:                    '772342789',  // Site Opportunity
     dealstage:                   '1128525596',  // Identified
     amount:                      String(pricing.subtotal),
