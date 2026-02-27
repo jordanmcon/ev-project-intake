@@ -786,8 +786,8 @@ async function submitToHubSpot() {
   // Pipeline: "CPQ Test" (875089784), Stage: "Identified" (1128525596)
   const dealProperties = {
     dealname:                    `${S.firstName} ${S.lastName} — EV Charging Quote`,
-    pipeline:                    '875089784',
-    dealstage:                   '1128525596',
+    pipeline:                    '772342789',  // Site Opportunity
+    dealstage:                   '1128525596',  // Identified
     amount:                      String(pricing.subtotal),
     number_of_stalls:            String(S.stalls),
     cpq_retail_question:         activeRetail.map(r => retailMapDeal[r] || r).join(';'),
@@ -795,7 +795,7 @@ async function submitToHubSpot() {
     cpq_design_services:         String(S.addDesign),
     cpq_epc_management:          String(S.addEPC),
     cpq_construction_management: String(S.addConstruction),
-    cpw_estimated_total_investment: String(pricing.subtotal),
+    cpw_estimated_total_investment: String(pricing.subtotal),  // label says CPQ but internal name is cpw
   };
 
   const res = await fetch(HS.proxyUrl, {
