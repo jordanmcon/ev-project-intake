@@ -642,7 +642,7 @@ function selectDate(val,el){
 }
 function makeDatePills(){
   const now=new Date();let h='';
-  for(let i=4;i<=9;i++){
+  for(let i=6;i<=17;i++){
     const d=new Date(now.getFullYear(),now.getMonth()+i,1);
     const mo=d.toLocaleString('default',{month:'short'}),yr=d.getFullYear(),full=d.toLocaleString('default',{month:'long'});
     const val=`${yr}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -722,6 +722,20 @@ const HS = {
   proxyUrl: '/api/hubspot', // Vercel serverless proxy — token lives server-side
 };
 
+// ── DATE HELPERS ──────────────────────────────────────────────
+// Returns the ideal completion date as a Unix timestamp (ms) — HubSpot date fields expect ms since epoch
+function calcCompletionDate() {
+  if (!S.startDate) return '';
+  const [yr, mo] = S.startDate.split('-').map(Number);
+  return Date.UTC(yr, mo - 1, 1);
+}
+function calcProjectStartDate() {
+  if (!S.startDate) return '';
+  const [yr, mo] = S.startDate.split('-').map(Number);
+  const startMs = Date.UTC(yr, mo - 1, 1) - 196 * 24 * 60 * 60 * 1000;
+  return startMs;
+}
+
 // ── HUBSPOT SUBMIT ────────────────────────────────────────────
 async function submitToHubSpot() {
   // Value maps: internal keys → HubSpot display strings
@@ -799,6 +813,8 @@ async function submitToHubSpot() {
     cpq_construction_management: String(S.addConstruction),
     cpw_estimated_total_investment: String(pricing.subtotal),  // label says CPQ but internal name is cpw
     cpq_quote:                       S.quoteId,
+    cpq_ideal_completion_date:       calcCompletionDate(),
+    cpq_calculated_start_date:       calcProjectStartDate(),
   };
 
   console.log('Submitting dealProperties:', JSON.stringify(dealProperties));
@@ -973,7 +989,7 @@ function renderQuote(){
   <div class="q-note">
       
       <div><div class="q-note-title">Next Steps</div><div class="q-note-body">
-      <ul style="padding-left=10px;">
+      <ul style="padding-left:18px;">
       <li>An Electric Era representative will reach out shortly to kick off a site assessment</li>
       <li> An Electric Era engineer will be assigned to create a site layout</li>
       <li> Bullet 3 </li>
