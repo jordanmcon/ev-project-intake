@@ -799,6 +799,7 @@ async function submitToHubSpot() {
     cpq_quote:                       S.quoteId,
   };
 
+  console.log('Submitting dealProperties:', JSON.stringify(dealProperties));
   const res = await fetch(HS.proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
