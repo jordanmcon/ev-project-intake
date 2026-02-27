@@ -421,8 +421,8 @@ const SLIDES = [
       <label>Budget approach</label>
       <div class="choices">
         ${[
-          ['allocated','','I have allocated capital for EV charging','Approved budget, ready to move forward'],
-          ['financed','','I need a financed option or subscription','Prefer OpEx, PPA, or subscription structures'],
+          ['allocated','','Direct purchase','I have approved budget for a direct purchase, and am ready to move forward'],
+          ['financed','','Monthly payments','I'm interested in Charging-as-a-Service (CaaS) models or financing options to minimize or reduce upfront costs.'],
         ].map(([v,icon,t,d],i)=>`
           <div class="choice ${S.budget===v?'sel':''}" onclick="pick('budget','${v}',this)">
             <div class="ck">${String.fromCharCode(65+i)}</div><div class="ci">${icon}</div>
