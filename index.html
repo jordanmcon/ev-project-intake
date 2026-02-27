@@ -965,7 +965,7 @@ function renderQuote(){
     <div class="q-sec">
       <div class="q-sec-title">Project Timeline</div>
       <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:18px 16px 14px;">
-        <p style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--mono);">Estimated schedule starting ${startLabel}. All durations are illustrative and subject to site-specific conditions.</p>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--mono);">Estimated schedule anchored to your target completion date. All durations are illustrative and subject to site-specific conditions.</p>
         ${buildGantt(S.startDate)}
       </div>
     </div>
@@ -992,12 +992,10 @@ function renderQuote(){
 }
 
 
-function buildGantt(startDateStr) {
-  // Parse start date (format: YYYY-MM)
-  const [yr, mo] = startDateStr.split('-').map(Number);
-  const start = new Date(yr, mo - 1, 1);
-
+function buildGantt(completionDateStr) {
   // Phases: [name, startDay, durationDays, color]
+  // These are fixed offsets from project day 0.
+  // Site Activation ends on day 211 (startDay 196 + dur 15 = 211).
   const phases = [
     ['Project Initiation',   0,   1,   '#F8B918'],
     ['Feasibility Phase',    1,   26,  '#d4a017'],
@@ -1008,25 +1006,58 @@ function buildGantt(startDateStr) {
     ['Site Activation',      196, 15,  '#ffffff'],
   ];
 
-  const totalDays = 215; // enough to cover all phases
+  // Site Activation starts at day 196.
+  // Work backwards: project start = completionDate - 196 days.
+  const SITE_ACTIVATION_START_DAY = 196;
+  const totalDays = 215; // chart width (a few days padding after Site Activation ends)
 
-  // Build month headers
-  const monthCount = Math.ceil(totalDays / 30) + 1;
+  // Parse completion date (YYYY-MM) — treat as 1st of that month
+  const [yr, mo] = completionDateStr.split('-').map(Number);
+  const completionDate = new Date(yr, mo - 1, 1);
+
+  // Project start = completionDate minus 196 days
+  const projectStart = new Date(completionDate);
+  projectStart.setDate(projectStart.getDate() - SITE_ACTIVATION_START_DAY);
+
+  // Build real calendar month headers spanning the chart range
+  // Chart covers projectStart to projectStart + totalDays
+  const chartEndDate = new Date(projectStart);
+  chartEndDate.setDate(chartEndDate.getDate() + totalDays);
+
+  // Collect unique months (year+month combos) from start to end
   let months = [];
-  for (let i = 0; i <= monthCount; i++) {
-    const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
-    months.push(d.toLocaleString('default', { month: 'short', year: '2-digit' }));
+  const cursor = new Date(projectStart.getFullYear(), projectStart.getMonth(), 1);
+  while (cursor <= chartEndDate) {
+    months.push(new Date(cursor));
+    cursor.setMonth(cursor.getMonth() + 1);
   }
 
+  const totalMs = chartEndDate - projectStart;
   const pct = d => (d / totalDays * 100).toFixed(2);
 
-  const monthsHtml = months.map((m, i) => {
-    const w = (1 / (monthCount + 1) * 100).toFixed(2);
-    return `<div class="gantt-mo" style="width:${w}%">${m}</div>`;
+  // For each month header, compute its left % position and width %
+  const monthsHtml = months.map((monthDate, i) => {
+    // Left edge of this month column
+    const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+    // Right edge = start of next month
+    const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1);
+
+    // Clamp to chart bounds
+    const clampedStart = monthStart < projectStart ? projectStart : monthStart;
+    const clampedEnd   = monthEnd   > chartEndDate  ? chartEndDate  : monthEnd;
+
+    const leftDays  = (clampedStart - projectStart) / 86400000;
+    const widthDays = (clampedEnd   - clampedStart) / 86400000;
+
+    const leftPct  = (leftDays  / totalDays * 100).toFixed(2);
+    const widthPct = (widthDays / totalDays * 100).toFixed(2);
+
+    const label = monthDate.toLocaleString('default', { month: 'short', year: '2-digit' });
+    return `<div class="gantt-mo" style="position:absolute;left:${leftPct}%;width:${widthPct}%;overflow:hidden;white-space:nowrap;">${label}</div>`;
   }).join('');
 
   const rowsHtml = phases.map(([name, startD, dur, color]) => {
-    const left = pct(startD);
+    const left  = pct(startD);
     const width = pct(dur);
     const label = dur >= 20 ? name : '';
     return `
@@ -1040,11 +1071,17 @@ function buildGantt(startDateStr) {
       </div>`;
   }).join('');
 
+  // Compute human-readable project start date for the subtitle
+  const startLabel = projectStart.toLocaleString('default', { month: 'long', year: 'numeric' });
+
   return `
     <div class="gantt-wrap">
-      <div class="gantt-months">${monthsHtml}</div>
+      <div class="gantt-months" style="position:relative;height:20px;margin-left:140px;margin-bottom:6px;border-bottom:1px solid var(--border);">${monthsHtml}</div>
       ${rowsHtml}
-    </div>`;
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin-top:10px;font-family:var(--mono);">
+      Required project start: <strong style="color:var(--gold)">${startLabel}</strong> — working backwards from your target completion date.
+    </p>`;
 }
 
 function restart(){
