@@ -77,6 +77,7 @@ export default async function handler(req, res) {
 
     // ── Step 3: Create Deal ───────────────────────────────────────────────────
     // Only sent on final quote submission, not intermediate step tracking calls.
+    console.log('dealProperties received:', dealProperties ? JSON.stringify(dealProperties) : 'none');
     if (dealProperties && contactId) {
 
       // 3a. Create the deal
@@ -89,10 +90,9 @@ export default async function handler(req, res) {
       if (!dealRes.ok) {
         const dealErr = await dealRes.json().catch(() => ({}));
         console.error('Deal creation failed:', JSON.stringify(dealErr));
-        // Return 200 so the user still sees their quote — include error detail for debugging
         return res.status(200).json({
           contact: contactData,
-          dealError: dealErr.message || JSON.stringify(dealErr),
+          dealError: JSON.stringify(dealErr),
         });
       }
 
