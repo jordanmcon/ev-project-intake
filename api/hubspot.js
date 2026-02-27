@@ -4,30 +4,19 @@
 //
 // Required HubSpot token scopes:
 //   crm.objects.contacts.write  crm.objects.contacts.read
-//   crm.objects.deals.write     crm.objects.contacts.read
+//   crm.objects.deals.write
 
 export default async function handler(req, res) {
-  // Allow CORS for browser requests
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Only allow POST
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const token = process.env.HUBSPOT_TOKEN;
-  if (!token) {
-    return res.status(500).json({ error: 'HubSpot token not configured' });
-  }
+  if (!token) return res.status(500).json({ error: 'HubSpot token not configured' });
 
-  // Ensure body is parsed
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
   const { email, properties, dealProperties } = body || {};
 
@@ -41,7 +30,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    // ── Step 1: Search for existing contact by email ──────────────────────────
+    // ── Step 1: Search for existing contact ───────────────────────────────────
     const searchRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts/search', {
       method: 'POST',
       headers,
@@ -61,59 +50,76 @@ export default async function handler(req, res) {
 
     // ── Step 2: Upsert contact ────────────────────────────────────────────────
     let contactId;
-    let apiRes;
+    let contactRes;
 
     if (searchData.total > 0) {
       contactId = searchData.results[0].id;
-      apiRes = await fetch(`https://api.hubspot.com/crm/v3/objects/contacts/${contactId}`, {
+      contactRes = await fetch(`https://api.hubspot.com/crm/v3/objects/contacts/${contactId}`, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({ properties }),
       });
     } else {
-      apiRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts', {
+      contactRes = await fetch('https://api.hubspot.com/crm/v3/objects/contacts', {
         method: 'POST',
         headers,
         body: JSON.stringify({ properties: { ...properties, email } }),
       });
     }
 
-    if (!apiRes.ok) {
-      const err = await apiRes.json().catch(() => ({}));
-      return res.status(apiRes.status).json({ error: err.message || 'HubSpot contact API error' });
+    if (!contactRes.ok) {
+      const err = await contactRes.json().catch(() => ({}));
+      return res.status(contactRes.status).json({ error: err.message || 'HubSpot contact API error' });
     }
 
-    const contactData = await apiRes.json();
+    const contactData = await contactRes.json();
     contactId = contactId || contactData.id;
 
-    // ── Step 3: Create Deal (only when dealProperties are provided) ───────────
-    // dealProperties are only sent on the final quote submission, not step tracking.
+    // ── Step 3: Create Deal ───────────────────────────────────────────────────
+    // Only sent on final quote submission, not intermediate step tracking calls.
     if (dealProperties && contactId) {
+
+      // 3a. Create the deal
       const dealRes = await fetch('https://api.hubspot.com/crm/v3/objects/deals', {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          properties: dealProperties,
-          associations: [
-            {
-              to: { id: contactId },
-              types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 3 }],
-            },
-          ],
-        }),
+        body: JSON.stringify({ properties: dealProperties }),
       });
 
       if (!dealRes.ok) {
-        // Log but don't fail the whole request — contact was already saved
         const dealErr = await dealRes.json().catch(() => ({}));
-        console.error('Deal creation failed:', dealErr);
+        console.error('Deal creation failed:', JSON.stringify(dealErr));
+        // Return 200 so the user still sees their quote — include error detail for debugging
         return res.status(200).json({
           contact: contactData,
-          dealError: dealErr.message || 'Deal creation failed',
+          dealError: dealErr.message || JSON.stringify(dealErr),
         });
       }
 
       const dealData = await dealRes.json();
+      const dealId = dealData.id;
+
+      // 3b. Associate deal → contact using the v4 associations API
+      const assocRes = await fetch(
+        `https://api.hubspot.com/crm/v4/objects/deals/${dealId}/associations/contacts/${contactId}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify([{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 3 }]),
+        }
+      );
+
+      if (!assocRes.ok) {
+        const assocErr = await assocRes.json().catch(() => ({}));
+        console.error('Deal association failed:', JSON.stringify(assocErr));
+        // Deal was created — just log the association failure
+        return res.status(200).json({
+          contact: contactData,
+          deal: dealData,
+          associationError: assocErr.message || JSON.stringify(assocErr),
+        });
+      }
+
       return res.status(200).json({ contact: contactData, deal: dealData });
     }
 
