@@ -796,6 +796,7 @@ async function submitToHubSpot() {
     cpq_epc_management:          String(S.addEPC),
     cpq_construction_management: String(S.addConstruction),
     cpw_estimated_total_investment: String(pricing.subtotal),  // label says CPQ but internal name is cpw
+    cpq_quote:                       S.quoteId,
   };
 
   const res = await fetch(HS.proxyUrl, {
@@ -835,6 +836,10 @@ async function trackStep(n) {
 async function showQuote(){
   if(!S.startDate){toast('Please select a start date.');return;}
 
+  // Generate quote ID first so it can be sent to HubSpot
+  S.quoteId='EE-'+Date.now().toString(36).toUpperCase().slice(-6);
+  S.quoteDate=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+
   // Show loading state on the button
   const btn = document.querySelector('[onclick="validateAndShowQuote()"]');
   if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
@@ -844,9 +849,6 @@ async function showQuote(){
   } catch(err) {
     console.error('HubSpot submission error:', err);
   }
-
-  S.quoteId='EE-'+Date.now().toString(36).toUpperCase().slice(-6);
-  S.quoteDate=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   window.location.hash='quote';
   document.getElementById('app').classList.add('gone');
   const qp=document.getElementById('quote-page');qp.classList.add('on');
