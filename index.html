@@ -458,7 +458,7 @@ const SLIDES = [
             ['none','','No battery','Direct grid connection'],
             ['125kw','','125 kW Battery','Best for moderate demand charges ($5–$14/kW/month)'],
             ['250kw','','250 kW Battery','Best for high utilization or high demand charges ($14+/kW/month)'],
-            ['unsure','','Not sure','Our team will help assess the right option for your site'],
+            ['unsure','','Not Sure','Our team will help assess the right option for your site'],
           ].map(([v,icon,t,d],i)=>`
             <div class="choice ${S.battery===v?'sel':''}" onclick="pickBattery('${v}',this)" style="padding:12px 14px;">
               <div class="ck">${String.fromCharCode(65+i)}</div><div class="ci">${icon}</div>
@@ -514,7 +514,7 @@ const SLIDES = [
     <p class="sub">Review your selections and add optional services before generating your quote.</p>
     <div class="sum-grid">
       <div class="sum-card"><div class="sum-label">Stalls</div><div class="sum-val gold">${S.stalls} DC Fast</div></div>
-      <div class="sum-card"><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'Not sure'}[S.battery]||'—'}</div></div>
+      <div class="sum-card"><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'Not Sure'}[S.battery]||'—'}</div></div>
       <div class="sum-card"><div class="sum-label">Retail Programs</div><div class="sum-val">${S.retailPrograms.includes('none')?'None selected':S.retailPrograms.length+' program'+(S.retailPrograms.length!==1?'s':'')}</div></div>
       <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">${{allocated:'Capital allocated',financed:'Financed / subscription'}[S.budget]||'—'}</div></div>
     </div>
@@ -763,7 +763,7 @@ async function submitToHubSpot() {
     'none':  'None',
     '125kw': '125 kW Battery',
     '250kw': '250 kW Battery',
-    'unsure': 'Not sure',
+    'unsure': 'Not Sure',
   };
   // Deal retail map — must match HubSpot enumeration values exactly
   const retailMapDeal = {
@@ -882,7 +882,7 @@ async function showQuote(){
 function renderQuote(){
   const p=calcPricing();
   const rLabels={'revenue-loss':'Losing EV traffic revenue','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance','other':'Other'};
-  const btLabel={none:'None','125kw':'125 kW System ($80K)','250kw':'250 kW System ($160K)',unsure:'Not sure'}[S.battery]||'—';
+  const btLabel={none:'None','125kw':'125 kW System ($80K)','250kw':'250 kW System ($160K)',unsure:'Not Sure'}[S.battery]||'—';
   const budgetLabel={allocated:'Capital allocated',financed:'Financing / subscription'}[S.budget]||'—';
   const startLabel=S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
   const pLabels={rmn:'Retail Media Network',loyalty:'Loyalty Program',membership:'Membership Program'};
@@ -996,8 +996,8 @@ function renderQuote(){
       <li>Check your email inbox for a record of your quote</li>
       <li>An Electric Era representative will reach out shortly to kick off a site assessment</li>
       <li> An Electric Era engineer will be assigned to create a site layout</li>
-      <li> <a href="https://jordanmcon.github.io/ev-charging-forecast/" style="text-decoration: underline;color: inherit;"> Forecast charging sessions, growth, and ROI for your location </a> </li>
-      <li> <a href="https://jordanmcon.github.io/ev-charging-retail-programs/" style="text-decoration: underline;color: inherit;"> Calculate the value of extending your existing retail programs to EV charging </a> </li>
+      <li> Explore:<a href="https://jordanmcon.github.io/ev-charging-forecast/" style="text-decoration: underline;color: inherit;"> Forecast charging sessions, growth, and ROI for your location </a> </li>
+      <li> Explore:<a href="https://jordanmcon.github.io/ev-charging-retail-programs/" style="text-decoration: underline;color: inherit;"> Calculate the value of extending your existing retail programs to EV charging </a> </li>
       </ul>
      <p><em> Note that Section 48E tax credits and grant eligibility are not reflected above and may significantly reduce your net investment. </em></p></div></div>
     </div>
