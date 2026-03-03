@@ -294,6 +294,70 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
 </div>
 
 <script>
+// ── GRANTS CONFIG ─────────────────────────────────────────────
+// ┌─────────────────────────────────────────────────────────────────────────────┐
+// │  GRANT PROGRAMS — edit this object to add, update, or remove grants.        │
+// │  URL usage:  index.html?grant=nevi-wa  (silently pre-loads grant)           │
+// │  Each key must be URL-safe (lowercase, hyphens only).                       │
+// │                                                                             │
+// │  Fields:                                                                    │
+// │    name          — display name shown in the form dropdown & quote          │
+// │    program       — program family label (shown in quote section header)     │
+// │    deductionType — 'percent' (of hardware+battery) OR 'flat' (fixed $)     │
+// │    deductionValue— percent as 0-100, or flat dollar amount                  │
+// │    cap           — max grant dollar amount (use Infinity if no cap)         │
+// │    expires       — display-only expiry string                               │
+// │    notes         — optional fine-print note shown on quote                  │
+// └─────────────────────────────────────────────────────────────────────────────┘
+const GRANTS = {
+  'nevi-wa': {
+    name: 'NEVI — Washington State',
+    program: 'National Electric Vehicle Infrastructure (NEVI)',
+    deductionType: 'percent',
+    deductionValue: 80,
+    cap: 400000,
+    expires: 'Dec 2025',
+    notes: 'Requires prevailing wage compliance. Subject to WSDOT approval.',
+  },
+  'nevi-tx': {
+    name: 'NEVI — Texas',
+    program: 'National Electric Vehicle Infrastructure (NEVI)',
+    deductionType: 'percent',
+    deductionValue: 80,
+    cap: 400000,
+    expires: 'Dec 2025',
+    notes: 'Administered by TxDOT. Subject to application approval.',
+  },
+  'nevi-ca': {
+    name: 'NEVI — California',
+    program: 'National Electric Vehicle Infrastructure (NEVI)',
+    deductionType: 'percent',
+    deductionValue: 80,
+    cap: 400000,
+    expires: 'Dec 2025',
+    notes: 'Administered by Caltrans. Subject to application approval.',
+  },
+  'utility-pge': {
+    name: 'PG&E EV Fast Charge Program',
+    program: 'Utility Incentive',
+    deductionType: 'flat',
+    deductionValue: 75000,
+    cap: 75000,
+    expires: 'Rolling',
+    notes: 'Subject to PG&E program availability and site eligibility.',
+  },
+};
+
+// Compute grant deduction dollar amount given a total
+function calcGrantDeduction(subtotal) {
+  const g = GRANTS[S.grant];
+  if (!g) return 0;
+  if (g.deductionType === 'percent') {
+    return Math.min(subtotal * (g.deductionValue / 100), g.cap);
+  }
+  return Math.min(g.deductionValue, g.cap);
+}
+
 // ── STATE ────────────────────────────────────────────────────
 const S = {
   reasons: [],          // multi: 'revenue-loss'|'competitive'|'brand'|'compliance'
@@ -306,8 +370,20 @@ const S = {
   retailPrograms: [],   // multi: 'rmn'|'loyalty'|'membership' or ['none']
   addDesign: false, addEPC: false, addConstruction: false, addNone: false,
   startDate: '',
+  grant: '',            // key from GRANTS config (pre-loaded via ?grant= URL param or form selection)
   quoteId: '', quoteDate: '',
 };
+
+// ── GRANT URL PARAM DETECTION ─────────────────────────────────
+// Reads ?grant=<key> from the URL on load and silently pre-populates S.grant.
+// No UI change — the grant just appears on the quote page.
+(function detectGrantParam() {
+  const param = new URLSearchParams(window.location.search).get('grant');
+  if (param && GRANTS[param]) {
+    S.grant = param;
+    console.log('[Grant] Pre-loaded from URL param:', param, '→', GRANTS[param].name);
+  }
+})();
 
 // ── PRICING ──────────────────────────────────────────────────
 function calcPricing() {
@@ -517,6 +593,7 @@ const SLIDES = [
       <div class="sum-card"><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'Not Sure'}[S.battery]||'—'}</div></div>
       <div class="sum-card"><div class="sum-label">Retail Programs</div><div class="sum-val">${S.retailPrograms.includes('none')?'None selected':S.retailPrograms.length+' program'+(S.retailPrograms.length!==1?'s':'')}</div></div>
       <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">${{allocated:'Capital allocated',financed:'Financed / subscription'}[S.budget]||'—'}</div></div>
+      <div class="sum-card" style="${S.grant && GRANTS[S.grant] ? 'border-color:var(--gold-border)' : ''}"><div class="sum-label">Grant Program</div><div class="sum-val ${S.grant && GRANTS[S.grant] ? 'gold' : ''}">${S.grant && GRANTS[S.grant] ? GRANTS[S.grant].name : 'None selected'}</div></div>
     </div>
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;">
       <div class="sec-label" style="margin-bottom:0;">Optional Services</div>
@@ -942,6 +1019,7 @@ function renderQuote(){
         <div class="q-info-card"><div class="qi-label">Primary Reasons</div><div class="qi-val">${S.reasons.map(r=>rLabels[r]).join(', ')||'—'}</div></div>
         <div class="q-info-card"><div class="qi-label">Budget Approach</div><div class="qi-val">${budgetLabel}</div></div>
         <div class="q-info-card"><div class="qi-label">Target Completion</div><div class="qi-val">${startLabel}</div></div>
+        ${S.grant && GRANTS[S.grant] ? `<div class="q-info-card" style="border-color:var(--gold-border);"><div class="qi-label">Grant Program</div><div class="qi-val" style="color:var(--gold);">${GRANTS[S.grant].name}</div></div>` : ''}
       </div>
     </div>
 
@@ -968,10 +1046,37 @@ function renderQuote(){
       </div>
     </div>`:''}
 
-    <div class="q-total">
+    <div class="q-total" style="${S.grant ? 'border-bottom-left-radius:4px;border-bottom-right-radius:4px;margin-bottom:0;border-bottom-color:var(--border);' : ''}">
       <div><div class="qt-label">Estimated Total Investment</div><small>Hardware + battery + Year 1 software + services · excl. utility upgrade costs</small></div>
       <div class="qt-amount">${fmt(p.subtotal)}</div>
     </div>
+
+    ${S.grant && GRANTS[S.grant] ? (() => {
+      const g = GRANTS[S.grant];
+      const deduction = calcGrantDeduction(p.subtotal);
+      const net = p.subtotal - deduction;
+      const pctNote = g.deductionType === 'percent'
+        ? `${g.deductionValue}% of eligible hardware & battery costs`
+        : `Flat incentive — program maximum`;
+      return `
+    <div style="background:var(--s2);border:1px solid var(--gold-border);border-top:none;border-radius:0 0 var(--r) var(--r);padding:13px 21px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:1rem;font-weight:500;color:var(--text);">${g.name}</div>
+          <div style="font-size:0.85rem;color:var(--muted);margin-top:2px;">${pctNote} · expires ${g.expires}</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:1.02rem;font-weight:500;color:#4ade80;white-space:nowrap;flex-shrink:0;">− ${fmt(deduction)}</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px;">
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:var(--text);">Estimated Net Investment</div>
+          <div style="font-size:0.8rem;color:var(--muted);font-family:var(--mono);margin-top:2px;">After ${g.name} · subject to application approval</div>
+        </div>
+        <div style="font-size:28px;font-weight:700;color:var(--gold);font-family:var(--mono);letter-spacing:-.03em;">${fmt(net)}</div>
+      </div>
+      ${g.notes ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:0.8rem;color:var(--muted);font-family:var(--mono);">⚠ ${g.notes}</div>` : ''}
+    </div>`;
+    })() : ''}
 
     ${S.budget==='financed'?`
     <div class="q-note" style="border-color:var(--gold-border);display:flex;gap:12px;align-items:flex-start;">
@@ -1105,7 +1210,10 @@ function buildGantt(completionDateStr) {
 }
 
 function restart(){
-  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',stalls:4,budget:'',battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:''});
+  // Re-detect grant from URL param on restart so campaign links stay active
+  const urlGrant = new URLSearchParams(window.location.search).get('grant');
+  const grantOnRestart = (urlGrant && GRANTS[urlGrant]) ? urlGrant : '';
+  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',stalls:4,budget:'',battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
   // Clear hash without triggering the hashchange listener
   window.removeEventListener('hashchange', onHashChange);
   window.location.hash='';
