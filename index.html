@@ -974,12 +974,12 @@ function renderQuote(){
     </div>
 
     ${S.budget==='financed'?`
-    <div class="q-note" style="border-color:var(--gold-border)">
-      
-      <div><div class="q-note-title">Financing & Subscription Options Available</div><div class="q-note-body">You indicated interest in a financed or subscription structure. Our team will follow up with OpEx and PPA options based on your site profile.</div></div>
+    <div class="q-note" style="border-color:var(--gold-border);display:flex;gap:12px;align-items:flex-start;">
+      <div>
+        <div class="q-note-title">Charging as a Service (CaaS)</div>
+        <div class="q-note-body">You indicated interest in a financed or subscription option. Our team will follow up with details about our <strong style="color:var(--text);">Charging as a Service</strong> offering. Monthly payment amounts are dependent on <strong style="color:var(--text);">location</strong>, <strong style="color:var(--text);">credit score</strong>, and <strong style="color:var(--text);">term length</strong> — an Electric Era representative will walk you through the options that best fit your situation.</div>
+      </div>
     </div>`:''}
-
-  
 
     <div class="q-sec">
       <div class="q-sec-title">Project Timeline</div>
