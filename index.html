@@ -1259,6 +1259,15 @@ function savePdf() {
       box-shadow: none !important;
       text-shadow: none !important;
     }
+    /* Preserve Gantt bar colours and add a black outline */
+    #q-wrap .gantt-bar {
+      background: revert !important;
+      outline: 1.5px solid #111 !important;
+      opacity: 1 !important;
+    }
+    #q-wrap .gantt-track {
+      background: #e5e5e5 !important;
+    }
     #q-wrap svg path, #q-wrap svg polygon, #q-wrap svg rect, #q-wrap svg circle {
       stroke: #111 !important;
       fill: #111 !important;
