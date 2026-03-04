@@ -1112,7 +1112,7 @@ function renderQuote(){
       <li> Explore:<a href="https://jordanmcon.github.io/ev-charging-forecast/" style="text-decoration: underline;color: inherit;"> Forecast charging sessions, growth, and ROI for your location </a> </li>
       <li> Explore:<a href="https://jordanmcon.github.io/ev-charging-retail-programs/" style="text-decoration: underline;color: inherit;"> Calculate the value of extending your existing retail programs to EV charging </a> </li>
       </ul>
-     <p><em> Note that Section 48E tax credits and grant eligibility are not reflected above and may significantly reduce your net investment. </em></p></div></div>
+     <p><em> Note that Section 48E tax credits are not reflected above and may significantly reduce your net investment. </em></p></div></div>
     </div>
 
     <div class="q-actions">
@@ -1136,7 +1136,7 @@ function buildGantt(completionDateStr) {
     ['Procurement',          27,  132, '#a07820'],
     ['Construction',         159, 37,  '#F8B918'],
     ['Utility Construction', 159, 44,  '#d4a017'],
-    ['Site Activation',      196, 15,  '#ffffff'],
+    ['Site Activation',      196, 15,  '#a0a0a0'],
   ];
 
   // Site Activation starts at day 196.
@@ -1269,12 +1269,16 @@ function savePdf() {
     }
     /* Preserve Gantt bar colours and add a black outline */
     #q-wrap .gantt-bar {
-      background: revert !important;
       outline: 1.5px solid #111 !important;
       opacity: 1 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     #q-wrap .gantt-track {
       background: #e5e5e5 !important;
+      overflow: visible !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     #q-wrap svg path, #q-wrap svg polygon, #q-wrap svg rect, #q-wrap svg circle {
       stroke: #111 !important;
