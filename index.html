@@ -1242,10 +1242,39 @@ function savePdf() {
     margin:       [12, 14, 12, 14],
     filename:     'ElectricEra-' + quoteId + '.pdf',
     image:        { type: 'jpeg', quality: 0.95 },
-    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#09080A', logging: false },
+    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false },
     jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
     pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
   };
+
+  // Inject a print-mode stylesheet that overrides all dark-theme colours to
+  // black-on-white. Removed immediately after capture so the UI is unchanged.
+  const printStyle = document.createElement('style');
+  printStyle.id = 'pdf-print-overrides';
+  printStyle.textContent = `
+    #q-wrap, #q-wrap * {
+      color: #111 !important;
+      background: #fff !important;
+      border-color: #ccc !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+    #q-wrap svg path, #q-wrap svg polygon, #q-wrap svg rect, #q-wrap svg circle {
+      stroke: #111 !important;
+      fill: #111 !important;
+    }
+    /* Keep the EE logo SVG white-on-black for legibility */
+    #q-wrap .q-logo svg path, #q-wrap .q-logo svg polygon {
+      fill: #111 !important;
+      stroke: none !important;
+    }
+    /* Section title rule lines */
+    #q-wrap .q-sec-title::after { background: #ccc !important; }
+    /* Grant deduction amount — keep it visually distinct */
+    #q-wrap [style*="4ade80"] { color: #1a7a3a !important; }
+  `;
+  document.head.appendChild(printStyle);
+
   // Temporarily expand the container for full capture
   const origStyle = el.style.cssText;
   el.style.maxHeight = 'none';
@@ -1253,15 +1282,16 @@ function savePdf() {
   const btn = event.target.closest('button');
   btn.textContent = 'Generating…';
   btn.disabled = true;
-  html2pdf().set(opt).from(el).save().then(() => {
+
+  const cleanup = () => {
     el.style.cssText = origStyle;
+    const ps = document.getElementById('pdf-print-overrides');
+    if (ps) ps.remove();
     btn.innerHTML = 'Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     btn.disabled = false;
-  }).catch(() => {
-    el.style.cssText = origStyle;
-    btn.innerHTML = 'Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    btn.disabled = false;
-  });
+  };
+
+  html2pdf().set(opt).from(el).save().then(cleanup).catch(cleanup);
 }
 window.addEventListener('hashchange', onHashChange);
 
