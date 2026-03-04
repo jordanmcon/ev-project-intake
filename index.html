@@ -897,6 +897,14 @@ async function submitToHubSpot() {
     cpq_calculated_start_date:       calcProjectStartDate(),
   };
 
+  // ── Grant fields ──────────────────────────────────────────────────────────
+  if (S.grant && GRANTS[S.grant]) {
+    const grantDeduction  = calcGrantDeduction(pricing.subtotal);
+    const grantNetInvestment = pricing.subtotal - grantDeduction;
+    dealProperties.cpq_grant_discount  = String(grantDeduction);
+    dealProperties.cpq_net_investment  = String(grantNetInvestment);
+  }
+
   console.log('Submitting dealProperties:', JSON.stringify(dealProperties));
   const res = await fetch(HS.proxyUrl, {
     method: 'POST',
