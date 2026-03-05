@@ -447,7 +447,7 @@ const SLIDES = [
       <div class="field"><label>First name</label><input type="text" id="firstName" placeholder="Alex" value="${S.firstName}" oninput="S.firstName=this.value"><div class="ferr" id="e-firstName">Required</div></div>
       <div class="field"><label>Last name</label><input type="text" id="lastName" placeholder="Rivera" value="${S.lastName}" oninput="S.lastName=this.value"><div class="ferr" id="e-lastName">Required</div></div>
     </div>
-    <div class="field"><label>Work email</label><input type="email" id="email" placeholder="alex@company.com" value="${S.email}" oninput="S.email=this.value"><div class="ferr" id="e-email">Please enter a valid email</div></div>
+    <div class="field"><label>Work email (your quote will be sent here)</label><input type="email" id="email" placeholder="alex@company.com" value="${S.email}" oninput="S.email=this.value"><div class="ferr" id="e-email">Please enter a valid email</div></div>
     <div class="field">
       <label>Business type</label>
       <select id="businessType" onchange="S.businessType=this.value">
@@ -1107,7 +1107,6 @@ function renderQuote(){
     </div>
 
     <div class="q-actions">
-      <a class="btn btn-primary" href="https://hubspot.electriceratechnologies.com/hs/payments/fjWmg7tfgXqrWypJ?referrer=PAYMENT_LINK" target="_blank">Reserve Now <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       <button class="btn btn-ghost" onclick="savePdf()">Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="restart()">Start over</button>
     </div>
