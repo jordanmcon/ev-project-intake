@@ -527,8 +527,8 @@ const SLIDES = [
         <div style="font-size:1.02rem;color:var(--dim);line-height:1.7;">
           <p style="margin-bottom:14px;">Choosing the right energy management solution can reduce utility demand charges, accelerate implementation timelines, unlock power capacity above the grid, and improve station profitability.</p>
                <ul style="padding-left:18px;">
-                     <li><a href="https://ev-p-and-l.vercel.app/" style="color:inherit;"> - Use this tool to help forecast station utilization (sessions per day) </a></li>
-                     <li><a href="https://electricera.tech/resources/utility-service-battery-sizing-for-storage-backed-ev-fast-charging-stations" style="color:inherit;"> - Read this white paper to learn about utility service & battery sizing for storage backed EV fast charging stations </a></li>
+                     <li><a href="https://ev-p-and-l.vercel.app/" style="color:inherit;"> Use this tool to help forecast station utilization (sessions per day) </a></li>
+                     <li><a href="https://electricera.tech/resources/utility-service-battery-sizing-for-storage-backed-ev-fast-charging-stations" style="color:inherit;"> Read this white paper to learn about utility service & battery sizing for storage backed EV fast charging stations </a></li>
                      </ul>
           <p style="margin-top:14px; margin-bottom:14px;">Not sure about your demand charges? Ask your utility.</p>
 
@@ -550,7 +550,7 @@ const SLIDES = [
     <h1>Do you want to add a <em>battery</em>?</h1>
     <div class="battery-layout">
       <div>
-        <p class="sub" style="margin-bottom:14px;">Reduce utility demand charges (a fee for the highest power (kW) used in a month), accelerates implementation timelines, unlocks power capacity above the grid, and can improve station profitability.</p>
+        <p class="sub" style="margin-bottom:14px;">Select your battery preference.</p>
         <div class="battery-choices">
           ${[
             ['none','','No battery','Direct grid connection'],
@@ -586,9 +586,9 @@ const SLIDES = [
           <p style="margin-bottom:14px;">An EV fast charge creates 20–40 minutes of captive engagement. Electric Era helps you make the most of it.</p>
                <ul style="padding-left:18px;">
                      <li><a href="https://ev-charging-retail-experiences.vercel.app/" style="color:inherit;">Use this tool to calculate the revenue potential of extending your retail programs to EV charging </a></li>
-                     <li><a href="https://electricera.tech/resources/extending-omnichannel-loyalty-programs-into-the-parking-lot-with-ev-charging" style="color:inherit;"> - Read this white paper by Accenture, PDI Technologies, and Electric Era to learn about integrating EV charging and omnichannel retail programs </a></li>
+                     <li><a href="https://electricera.tech/resources/extending-omnichannel-loyalty-programs-into-the-parking-lot-with-ev-charging" style="color:inherit;"> Read this white paper by Accenture, PDI Technologies, and Electric Era to learn about integrating EV charging and omnichannel retail programs </a></li>
                      </ul>
-          <p style="margin-top:14px;margin-bottom:14px;">Electric Era RetailEdge Stations come with HaloAI, an on-charger AI assistant that helps with driver support and can personalize retail promotions. <a href="https://electricera.tech/products/halo-ai" style="color:inherit;">Learn more about HaloAI.</a></p>
+          <p style="margin-top:14px;margin-bottom:14px;">Electric Era RetailEdge Stations come with <em>HaloAI</em>, an on-charger AI assistant that helps with driver support and can personalize retail promotions. <a href="https://electricera.tech/products/halo-ai" style="color:inherit;">Learn more about HaloAI.</a></p>
         </div>
       </div>
 <div style="border-radius:var(--r);overflow:hidden;">
@@ -1064,7 +1064,7 @@ function renderQuote(){
   const bizLabel={'business-owner':'Business Owner',cpo:'Charge Point Operator',distributor:'Distributor',vendor:'Vendor',other:'Other'}[S.businessType]||'—';
 
   const softwareDesc=activePrograms.length
-    ?`${fmt(p.ratePerPort)}/port/yr`
+    ?`${fmt(p.ratePerPort)}/port/year`
     :'Standard charging software (no retail programs)';
 
   const addonRows=[
@@ -1131,7 +1131,7 @@ function renderQuote(){
     <div class="q-sec">
       <div class="q-sec-title-row"><div class="q-sec-title">Electric Era Experiences & Standard O&M</div><button class="q-edit-btn" onclick="goBackFromQuote(7)">Edit ↗</button></div>
       <div class="q-table">
-        <div class="q-row"><div><div class="q-row-name">Electric Era Platform${activePrograms.length?' + Retail Programs':''}</div><div class="q-row-desc">${softwareDesc}</div></div><div class="q-price ${p.software>0?'gold':'dim'}">${p.software>0?fmt(p.software)+'/yr':'Included'}</div></div>
+        <div class="q-row"><div><div class="q-row-name">Electric Era Platform${activePrograms.length?' + Retail Programs':''}</div><div class="q-row-desc">${softwareDesc}</div></div><div class="q-price ${p.software>0?'gold':'dim'}">${p.software>0?fmt(p.software)+'/year':'Included'}</div></div>
       </div>
     </div>
 
