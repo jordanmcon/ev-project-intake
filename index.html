@@ -223,6 +223,11 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
 .q-disclaimer{margin-top:18px;font-size:0.8rem;color:var(--muted);line-height:1.65;font-family:var(--mono)}
 
 
+.q-edit-btn{background:none;border:none;cursor:pointer;font-size:0.72rem;font-family:var(--mono);color:var(--gold);opacity:.6;padding:0;white-space:nowrap;letter-spacing:.05em;transition:opacity .15s;flex-shrink:0;}
+.q-edit-btn:hover{opacity:1;}
+.q-sec-title-row{display:flex;align-items:center;gap:8px;margin-bottom:9px;}
+.q-sec-title-row .q-sec-title{margin-bottom:0;flex:1;}
+
 /* GANTT */
 .gantt-wrap{margin-top:4px}
 .gantt-row{display:flex;align-items:center;gap:0;margin-bottom:3px;min-height:28px}
@@ -1102,7 +1107,7 @@ function renderQuote(){
     </div>
 
     <div class="q-sec">
-      <div class="q-sec-title">Project Overview</div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Project Overview</div><button class="q-edit-btn" onclick="goBackFromQuote(2)">Edit ↗</button></div>
       <div class="q-info-grid">
         <div class="q-info-card"><div class="qi-label">Contact</div><div class="qi-val">${S.firstName} ${S.lastName}</div></div>
         <div class="q-info-card"><div class="qi-label">Email</div><div class="qi-val">${S.email}</div></div>
@@ -1116,7 +1121,7 @@ function renderQuote(){
     </div>
 
     <div class="q-sec">
-      <div class="q-sec-title">Hardware</div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">DC Fast Charging Stations — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era kiosks with integrated retail media display</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
         <div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${S.battery==='none'?'Direct grid connection only':'An Electric Era expert can help you understand if a battery makes sense'}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>
@@ -1124,7 +1129,7 @@ function renderQuote(){
     </div>
 
     <div class="q-sec">
-      <div class="q-sec-title">Electric Era Experiences & Standard O&M</div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Electric Era Experiences & Standard O&M</div><button class="q-edit-btn" onclick="goBackFromQuote(7)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">Electric Era Platform${activePrograms.length?' + Retail Programs':''}</div><div class="q-row-desc">${softwareDesc}</div></div><div class="q-price ${p.software>0?'gold':'dim'}">${p.software>0?fmt(p.software)+'/yr':'Included'}</div></div>
       </div>
@@ -1132,7 +1137,7 @@ function renderQuote(){
 
     ${addonRows.length?`
     <div class="q-sec">
-      <div class="q-sec-title">Add-on Services</div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Add-on Services</div><button class="q-edit-btn" onclick="goBackFromQuote(8)">Edit ↗</button></div>
       <div class="q-table">
         ${addonRows.map(([name,desc,price])=>`<div class="q-row"><div><div class="q-row-name">${name}</div><div class="q-row-desc">${desc}</div></div><div class="q-price gold">${price}</div></div>`).join('')}
       </div>
@@ -1179,7 +1184,7 @@ function renderQuote(){
     </div>`:''}
 
     <div class="q-sec">
-      <div class="q-sec-title">Project Timeline</div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Project Timeline</div><button class="q-edit-btn" onclick="goBackFromQuote(8)">Edit ↗</button></div>
       <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:18px 16px 14px;">
         <p style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--mono);">Estimated schedule anchored to your target completion date. All durations are illustrative and subject to site-specific conditions.</p>
         ${buildGantt(S.startDate)}
@@ -1325,6 +1330,12 @@ document.addEventListener('keydown',e=>{
 });
 
 function onHashChange(){ if(window.location.hash!=='#quote') restart(); }
+
+function goBackFromQuote(idx){
+  document.getElementById('quote-page').classList.remove('on');
+  document.getElementById('app').classList.remove('gone');
+  go(idx);
+}
 
 function savePdf() {
   const el = document.getElementById('q-wrap');
