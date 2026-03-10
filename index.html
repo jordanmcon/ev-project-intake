@@ -120,12 +120,7 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.18)}
 /* BATTERY LAYOUT */
 .battery-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
 .battery-choices{display:flex;flex-direction:column;gap:7px}
-.battery-chart-box{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:16px}
-.bchart-title{font-size:1.1rem;font-weight:400;color:var(--text);margin-bottom:5px}
-.bchart-sub{font-size:1.02rem;color:var(--muted);line-height:1.4;margin-bottom:12px}
-.bchart-wrap{position:relative;width:100%;height:170px}
-canvas#bChart{width:100%!important;height:170px!important}
-.bchart-link{font-size:1.02rem;color:var(--gold);text-decoration:underline;cursor:pointer;margin-top:9px;display:inline-block;font-family:var(--mono)}
+
 
 /* BUTTONS */
 .cta-row{display:flex;align-items:center;gap:10px;margin-top:26px}
@@ -388,11 +383,12 @@ function calcPricing() {
   const ratePerPort = [14000, 14000, 18000, 28000][n] || 0;
   const software = ratePerPort * S.stalls;
   const batteryPrice = S.battery === '125kw' ? 123000 : S.battery === '250kw' ? 186000 : 0;
+  const batteryOM = (S.battery === '125kw' || S.battery === '250kw') ? 9000 : 0;
   const design = S.addDesign ? 31500 : 0;
   const epc = S.addEPC ? 40000 : 0;
   const construction = S.addConstruction ? 164500 : 0;
-  const subtotal = hardware + software + batteryPrice + design + epc + construction;
-  return { hardware, software, batteryPrice, design, epc, construction, subtotal, ratePerPort, n };
+  const subtotal = hardware + software + batteryPrice + batteryOM + design + epc + construction;
+  return { hardware, software, batteryPrice, batteryOM, design, epc, construction, subtotal, ratePerPort, n };
 }
 
 function fmt(n) { return '$' + n.toLocaleString('en-US'); }
@@ -828,66 +824,6 @@ function toast(msg){
 }
 
 // ── BATTERY CHART ────────────────────────────────────────────
-function drawBatteryChart(){
-  const canvas=document.getElementById('bChart');if(!canvas)return;
-  const ctx=canvas.getContext('2d');
-  const dpr=window.devicePixelRatio||1;
-  const W=canvas.offsetWidth,H=canvas.offsetHeight;
-  canvas.width=W*dpr;canvas.height=H*dpr;ctx.scale(dpr,dpr);
-
-  const gold='#F8B918',white='rgba(240,238,243,0.85)',grid='rgba(255,255,255,0.055)',label='rgba(240,238,243,0.4)';
-  const pl=32,pr=10,pt=10,pb=26;
-  const cw=W-pl-pr,ch=H-pt-pb;
-  const xMax=25,yMax=100;
-  const toX=v=>pl+(v/xMax)*cw;
-  const toY=v=>pt+ch-(v/yMax)*ch;
-
-  // Grid
-  ctx.strokeStyle=grid;ctx.lineWidth=1;
-  [0,25,50,75,100].forEach(y=>{ctx.beginPath();ctx.moveTo(pl,toY(y));ctx.lineTo(pl+cw,toY(y));ctx.stroke();});
-  [0,5,10,15,20,25].forEach(x=>{ctx.beginPath();ctx.moveTo(toX(x),pt);ctx.lineTo(toX(x),pt+ch);ctx.stroke();});
-
-  // Labels
-  ctx.fillStyle=label;ctx.font=`9px DM Mono,monospace`;
-  ctx.textAlign='right';[0,25,50,75,100].forEach(y=>ctx.fillText(y,pl-3,toY(y)+3));
-  ctx.textAlign='center';[0,5,10,15,20,25].forEach(x=>ctx.fillText('$'+x,toX(x),pt+ch+16));
-
-  // 125kW zone
-  ctx.beginPath();ctx.moveTo(toX(5),toY(0));ctx.lineTo(toX(25),toY(60));
-  ctx.strokeStyle=white;ctx.lineWidth=1.5;ctx.stroke();
-  ctx.fillStyle='rgba(240,238,243,0.04)';
-  ctx.beginPath();ctx.moveTo(toX(5),toY(0));ctx.lineTo(toX(25),toY(60));ctx.lineTo(toX(25),toY(0));ctx.lineTo(toX(5),toY(0));ctx.fill();
-  ctx.fillStyle=label;ctx.font='9px DM Mono,monospace';ctx.textAlign='left';
-  ctx.fillText('125 kW Battery Zone',toX(11),toY(7));
-
-  // 250kW filled zone
-  ctx.fillStyle='rgba(248,185,24,0.08)';
-  ctx.beginPath();ctx.moveTo(toX(13),toY(60));ctx.lineTo(toX(13),toY(100));ctx.lineTo(toX(25),toY(100));ctx.lineTo(toX(25),toY(85));ctx.closePath();ctx.fill();
-
-  // 250kW sloped line
-  ctx.beginPath();ctx.moveTo(toX(13),toY(60));ctx.lineTo(toX(25),toY(85));
-  ctx.strokeStyle=gold;ctx.lineWidth=2;ctx.stroke();
-
-  // Capacity unlock horizontal dashed
-  ctx.beginPath();ctx.moveTo(toX(13),toY(100));ctx.lineTo(toX(25),toY(100));
-  ctx.strokeStyle=gold;ctx.lineWidth=1.5;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);
-
-  // Labels
-  ctx.fillStyle='rgba(248,185,24,0.8)';ctx.font='600 9px DM Sans,sans-serif';ctx.textAlign='right';
-  ctx.fillText('250 kW Battery Zone',toX(24.5),toY(70));
-  ctx.fillStyle='rgba(248,185,24,0.65)';ctx.font='9px DM Mono,monospace';ctx.textAlign='left';
-  ctx.fillText('Capacity Unlock (value is throughput)',toX(13.4),toY(97));
-
-  // Axes
-  ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(pl,pt);ctx.lineTo(pl,pt+ch);ctx.lineTo(pl+cw,pt+ch);ctx.stroke();
-
-  // Axis titles
-  ctx.fillStyle=label;ctx.font='9px DM Mono,monospace';ctx.textAlign='center';
-  ctx.fillText('Demand Charges (per kW)',pl+cw/2,H-2);
-  ctx.save();ctx.translate(9,pt+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('Sessions Per Day',0,0);ctx.restore();
-}
-
 // ── HUBSPOT CONFIG ────────────────────────────────────────────
 const HS = {
   proxyUrl: '/api/hubspot', // Vercel serverless proxy — token lives server-side
@@ -1136,6 +1072,7 @@ function renderQuote(){
       <div class="q-sec-title-row"><div class="q-sec-title">Electric Era Experiences & Standard O&M</div><button class="q-edit-btn" onclick="goBackFromQuote(7)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">Electric Era Platform${activePrograms.length?' + Retail Programs':''}</div><div class="q-row-desc">${softwareDesc}</div></div><div class="q-price ${p.software>0?'gold':'dim'}">${p.software>0?fmt(p.software)+'/year':'Included'}</div></div>
+        ${p.batteryOM>0?`<div class="q-row"><div><div class="q-row-name">Battery O&M</div><div class="q-row-desc">Annual maintenance & monitoring for battery energy storage system</div></div><div class="q-price gold">${fmt(p.batteryOM)}/year</div></div>`:''}
       </div>
     </div>
 
