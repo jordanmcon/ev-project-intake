@@ -513,7 +513,30 @@ const SLIDES = [
       return ok;
   }},
 
-  // 4 — BATTERY (ENERGY MANAGEMENT)
+  // 4 — BATTERY INTERSTITIAL
+  { step:2, render:()=>`
+    <div class="eyebrow">Step 2 — Energy Management Plan</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:8px;">
+      <div>
+        <h1 style="margin-bottom:18px;">Understanding <em>energy management</em>.</h1>
+        <div style="font-size:1.02rem;color:var(--dim);line-height:1.7;">
+          <p style="margin-bottom:14px;">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+          <p style="margin-bottom:14px;">Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</p>
+          <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+        </div>
+      </div>
+      <div style="background:var(--s2);border:1px dashed var(--border);border-radius:var(--r);min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;">
+        <div style="font-size:32px;opacity:.25;">🖼</div>
+        <div style="font-size:0.8rem;font-family:var(--mono);color:var(--muted);letter-spacing:.06em;text-align:center;">IMAGE PLACEHOLDER<br><span style="opacity:.6;">Replace with your image</span></div>
+      </div>
+    </div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn btn-ghost" onclick="prev()">Back</button>
+    </div>
+  `, valid:()=>true },
+
+  // 5 — BATTERY (ENERGY MANAGEMENT)
   { step:2, render:()=>`
     <div class="eyebrow">Step 2 — Energy Management Plan</div>
     <h1>Do you want to add a <em>battery</em>?</h1>
@@ -546,7 +569,30 @@ const SLIDES = [
     valid:()=>{ if(S.battery===null){toast('Please select a battery option.');return false;} trackStep(2); return true; }
   },
 
-  // 5 — RETAIL PROGRAMS
+  // 6 — RETAIL INTERSTITIAL
+  { step:3, render:()=>`
+    <div class="eyebrow">Step 3 — Retail Experiences</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:8px;">
+      <div>
+        <h1 style="margin-bottom:18px;">The power of <em>retail experiences</em>.</h1>
+        <div style="font-size:1.02rem;color:var(--dim);line-height:1.7;">
+          <p style="margin-bottom:14px;">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+          <p style="margin-bottom:14px;">Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</p>
+          <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+        </div>
+      </div>
+      <div style="background:var(--s2);border:1px dashed var(--border);border-radius:var(--r);min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;">
+        <div style="font-size:32px;opacity:.25;">🖼</div>
+        <div style="font-size:0.8rem;font-family:var(--mono);color:var(--muted);letter-spacing:.06em;text-align:center;">IMAGE PLACEHOLDER<br><span style="opacity:.6;">Replace with your image</span></div>
+      </div>
+    </div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn btn-ghost" onclick="prev()">Back</button>
+    </div>
+  `, valid:()=>true },
+
+  // 7 — RETAIL PROGRAMS
   { step:3, render:()=>`
     <div class="eyebrow">Step 3 — Retail Experiences</div>
     <h1>Which <em>retail programs</em> do you want to activate?</h1>
@@ -573,22 +619,39 @@ const SLIDES = [
     </div>
   `, valid:()=>{ if(!S.retailPrograms.length){toast('Please make a selection.');return false;} trackStep(3); return true; } },
 
-  // 6 — SUMMARY + ADD-ONS
+  // 8 — SUMMARY + ADD-ONS
   { step:4, render:()=>{
     return `
     <div class="eyebrow">Step 4 — Summary & Add-ons</div>
     <h1>Here's your <em>configuration</em>.</h1>
     <p class="sub">Review your selections and add optional services before generating your quote.</p>
     <div class="sum-grid">
-      <div class="sum-card"><div class="sum-label">Stalls</div><div class="sum-val gold">${S.stalls} DC Fast</div></div>
-      <div class="sum-card"><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'Not Sure'}[S.battery]||'—'}</div></div>
-      <div class="sum-card"><div class="sum-label">Retail Programs</div><div class="sum-val">${S.retailPrograms.includes('none')?'None selected':S.retailPrograms.length+' program'+(S.retailPrograms.length!==1?'s':'')}</div></div>
+      <div class="sum-card" style="position:relative;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div><div class="sum-label">Stalls</div><div class="sum-val gold">${S.stalls} DC Fast</div></div>
+          <button onclick="go(3)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+        </div>
+      </div>
+      <div class="sum-card" style="position:relative;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'Not Sure'}[S.battery]||'—'}</div></div>
+          <button onclick="go(5)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+        </div>
+      </div>
+      <div class="sum-card" style="position:relative;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div><div class="sum-label">Retail Programs</div><div class="sum-val">${S.retailPrograms.includes('none')?'None selected':S.retailPrograms.length+' program'+(S.retailPrograms.length!==1?'s':'')}</div></div>
+          <button onclick="go(7)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+        </div>
+      </div>
       <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">${{allocated:'Direct purchase',financed:'Financed / subscription model'}[S.budget]||'—'}</div></div>
       <div class="sum-card" style="${S.grant && GRANTS[S.grant] ? 'border-color:var(--gold-border)' : ''}"><div class="sum-label">Grant Program</div><div class="sum-val ${S.grant && GRANTS[S.grant] ? 'gold' : ''}">${S.grant && GRANTS[S.grant] ? GRANTS[S.grant].name : 'None selected'}</div></div>
     </div>
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;">
       <div class="sec-label" style="margin-bottom:0;">Optional Services</div>
-      <span style="font-size:0.78rem;font-family:var(--mono);color:var(--muted);letter-spacing:.04em;">Select all that apply — one choice required</span>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span style="font-size:0.78rem;font-family:var(--mono);color:var(--muted);letter-spacing:.04em;">Select all that apply — one choice required</span>
+      </div>
     </div>
     <div class="addon-list">
       ${[
@@ -1336,7 +1399,7 @@ window.addEventListener('hashchange', onHashChange);
 // Init dots — clickable, each navigates to first slide of that step
 const dc=document.getElementById('dots');
 // Map dot index → first SLIDES index for that step
-const dotToSlide=[0,4,5,6]; // step1→slide0, step2→slide4, step3→slide5, step4→slide6
+const dotToSlide=[0,4,6,8]; // step1→slide0, step2→slide4, step3→slide6, step4→slide8
 ['Intake','Energy','Retail','Summary'].forEach((_,i)=>{
   const d=document.createElement('div');
   d.className='dot'+(i===0?' on':'');
