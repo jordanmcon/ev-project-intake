@@ -378,14 +378,14 @@ const S = {
 
 // ── PRICING ──────────────────────────────────────────────────
 function calcPricing() {
-  const hardware = S.stalls * 50000;
+  const hardware = S.stalls * 45000;
   const n = S.retailPrograms.filter(p => p !== 'none').length;
-  const ratePerPort = [0, 10500, 14500, 24500][n] || 0;
+  const ratePerPort = [14000, 14000, 18000, 28000][n] || 0;
   const software = ratePerPort * S.stalls;
-  const batteryPrice = S.battery === '125kw' ? 80000 : S.battery === '250kw' ? 160000 : 0;
-  const design = S.addDesign ? 60000 : 0;
-  const epc = S.addEPC ? 60000 : 0;
-  const construction = S.addConstruction ? 80000 : 0;
+  const batteryPrice = S.battery === '125kw' ? 132000 : S.battery === '250kw' ? 195000 : 0;
+  const design = S.addDesign ? 31500 : 0;
+  const epc = S.addEPC ? 40000 : 0;
+  const construction = S.addConstruction ? 164500 : 0;
   const subtotal = hardware + software + batteryPrice + design + epc + construction;
   return { hardware, software, batteryPrice, design, epc, construction, subtotal, ratePerPort, n };
 }
@@ -401,7 +401,7 @@ const SLIDES = [
       <div>
         <div class="eyebrow">Step 1 — Project Intake</div>
         <h1>Let's build your <em>EV charging</em> project.</h1>
-        <p class="sub">A few quick questions to understand your goals, configure your station, and generate a custom quote. Takes about 3 minutes.</p>
+        <p class="sub">A few quick questions to understand your goals, configure your station, and generate a custom quote. Takes about 5 minutes.</p>
         <div class="cta-row">
           <button class="btn btn-primary" onclick="next()">Get started <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
@@ -592,8 +592,8 @@ const SLIDES = [
     </div>
     <div class="addon-list">
       ${[
-        ['addDesign','','Design Services','Custom kiosk branding, wayfinding, visual identity'],
-        ['addEPC','','EPC Management','Electrical design, permits, utility coordination'],
+        ['addDesign','','Design Services','Site design and site feasibility study'],
+        ['addEPC','','EPC Management','Engineering, permits, utility coordination, and project management'],
         ['addConstruction','','Construction','Site prep, trenching, installation'],
       ].map(([key,icon,name,desc])=>`
         <div class="addon ${S[key]?'sel':''}" onclick="toggleAddon('${key}',this)">
@@ -997,8 +997,8 @@ function renderQuote(){
     :'Standard charging software (no retail programs)';
 
   const addonRows=[
-    S.addDesign?['Design Services','Custom kiosk branding, wayfinding, and visual identity',fmt(p.design)]:null,
-    S.addEPC?['EPC Management','Electrical design, permitting, utility coordination',fmt(p.epc)]:null,
+    S.addDesign?['Design Services','Site design and site feasibility study',fmt(p.design)]:null,
+    S.addEPC?['EPC Management','Engineering, permitting, utility coordination, and projeect management',fmt(p.epc)]:null,
     S.addConstruction?['Construction Management','Site prep, trenching, and installation oversight',fmt(p.construction)]:null,
   ].filter(Boolean);
 
