@@ -552,7 +552,7 @@ const SLIDES = [
         <p class="sub" style="margin-bottom:14px;">Select your battery preference.</p>
         <div class="battery-choices">
           ${[
-            ['none','','No battery','Direct grid connection'],
+            ['none','','No battery','Direct grid connection only'],
             ['125kw','','125 kW Battery','Best for moderate demand charges ($5–$14/kW/month)'],
             ['250kw','','250 kW Battery','Best for high utilization or high demand charges ($14+/kW/month)'],
             ['unsure','','Not Sure','Our team will help assess the right option for your site'],
@@ -996,7 +996,7 @@ async function showQuote(){
 function renderQuote(){
   const p=calcPricing();
   const rLabels={'revenue-loss':'Losing EV traffic revenue','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance','other':'Other'};
-  const btLabel={none:'None','125kw':'125 kW System ($123K)','250kw':'250 kW System ($186K)',unsure:'Not Sure'}[S.battery]||'—';
+  const btLabel={none:'None','125kw':'125 kW System','250kw':'250 kW System',unsure:'Not Sure'}[S.battery]||'—';
   const budgetLabel={allocated:'Direct purchase',financed:'Financing / subscription model'}[S.budget]||'—';
   const startLabel=S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
   const pLabels={rmn:'Retail Media Network',loyalty:'Loyalty Program',membership:'Membership Program'};
@@ -1064,8 +1064,7 @@ function renderQuote(){
       <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">DC Fast Charging Stations — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era kiosks with integrated retail media display</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
-        <div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${S.battery==='none'?'Direct grid connection only':'An Electric Era expert can help you understand if a battery makes sense'}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>
-      </div>
+<div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW battery energy storage system','250kw':'250 kW battery energy storage system',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>      </div>
     </div>
 
     <div class="q-sec">
