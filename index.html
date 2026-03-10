@@ -383,11 +383,11 @@ const S = {
 
 // ── PRICING ──────────────────────────────────────────────────
 function calcPricing() {
-  const hardware = S.stalls * 45000;
+  const hardware = S.stalls * 55000;
   const n = S.retailPrograms.filter(p => p !== 'none').length;
   const ratePerPort = [14000, 14000, 18000, 28000][n] || 0;
   const software = ratePerPort * S.stalls;
-  const batteryPrice = S.battery === '125kw' ? 132000 : S.battery === '250kw' ? 195000 : 0;
+  const batteryPrice = S.battery === '125kw' ? 123000 : S.battery === '250kw' ? 186000 : 0;
   const design = S.addDesign ? 31500 : 0;
   const epc = S.addEPC ? 40000 : 0;
   const construction = S.addConstruction ? 164500 : 0;
@@ -1060,7 +1060,7 @@ async function showQuote(){
 function renderQuote(){
   const p=calcPricing();
   const rLabels={'revenue-loss':'Losing EV traffic revenue','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance','other':'Other'};
-  const btLabel={none:'None','125kw':'125 kW System ($80K)','250kw':'250 kW System ($160K)',unsure:'Not Sure'}[S.battery]||'—';
+  const btLabel={none:'None','125kw':'125 kW System ($123K)','250kw':'250 kW System ($186K)',unsure:'Not Sure'}[S.battery]||'—';
   const budgetLabel={allocated:'Direct purchase',financed:'Financing / subscription model'}[S.budget]||'—';
   const startLabel=S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
   const pLabels={rmn:'Retail Media Network',loyalty:'Loyalty Program',membership:'Membership Program'};
