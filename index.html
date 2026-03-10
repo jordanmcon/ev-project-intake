@@ -218,7 +218,7 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
 .q-note{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;display:block;margin-bottom:10px}
 .q-note-icon{font-size:19px;flex-shrink:0}
 .q-note-title{font-size:1.05rem;font-weight:400;color:var(--text);margin-bottom:3px}
-.q-note-body{font-size:1.02rem;color:var(--muted);line-height:1.55}
+.q-note-body{font-size:1.02rem;color:var(--text);line-height:1.55}
 .q-actions{display:flex;gap:10px;padding-top:22px;border-top:1px solid var(--border)}
 .q-disclaimer{margin-top:18px;font-size:0.8rem;color:var(--muted);line-height:1.65;font-family:var(--mono)}
 
@@ -526,8 +526,11 @@ const SLIDES = [
         <h1 style="margin-bottom:18px;">Understanding <em>energy management</em>.</h1>
         <div style="font-size:1.02rem;color:var(--dim);line-height:1.7;">
           <p style="margin-bottom:14px;">Choosing the right energy management solution can reduce utility demand charges, accelerate implementation timelines, unlock power capacity above the grid, and improve station profitability.</p>
+          <p style="margin-bottom:14px;">Electric Era leads the industry in energy management. Our patented software paired with on-site battery storage can deliver a fast charging station that exceeds the grid connection and keeps your demand charges low. On the next page, let us know what size battery you would like with your station.
+</p>          
                <ul style="padding-left:18px;">
                      <li><a href="https://ev-p-and-l.vercel.app/" style="color:inherit;"> Use this tool to help forecast station utilization (sessions per day) </a></li>
+                     <li><a href="https://electricera.tech/resources/mitigating-demand-charges-with-a-smarter-approach-to-ev-charging" style="color:inherit;"> Read this white paper on demand charges and how to mitigate them </a></li>
                      <li><a href="https://electricera.tech/resources/utility-service-battery-sizing-for-storage-backed-ev-fast-charging-stations" style="color:inherit;"> Read this white paper to learn about utility service & battery sizing for storage backed EV fast charging stations </a></li>
                      </ul>
           <p style="margin-top:14px; margin-bottom:14px;">Not sure about your demand charges? Ask your utility.</p>
@@ -584,15 +587,15 @@ const SLIDES = [
         <h1 style="margin-bottom:18px;">The power of <em>Retail Experiences</em>.</h1>
         <div style="font-size:1.02rem;color:var(--dim);line-height:1.7;">
           <p style="margin-bottom:14px;">An EV fast charge creates 20–40 minutes of captive engagement. Electric Era helps you make the most of it.</p>
+          <p style="margin-top:14px;margin-bottom:14px;">Electric Era RetailEdge Stations come with <em>HaloAI</em>, an on-charger AI assistant that helps with driver support and can personalize retail promotions. <a href="https://electricera.tech/products/halo-ai" style="color:inherit;">Learn more about HaloAI.</a></p>
                <ul style="padding-left:18px;">
                      <li><a href="https://ev-charging-retail-experiences.vercel.app/" style="color:inherit;">Use this tool to calculate the revenue potential of extending your retail programs to EV charging </a></li>
                      <li><a href="https://electricera.tech/resources/extending-omnichannel-loyalty-programs-into-the-parking-lot-with-ev-charging" style="color:inherit;"> Read this white paper by Accenture, PDI Technologies, and Electric Era to learn about integrating EV charging and omnichannel retail programs </a></li>
                      </ul>
-          <p style="margin-top:14px;margin-bottom:14px;">Electric Era RetailEdge Stations come with <em>HaloAI</em>, an on-charger AI assistant that helps with driver support and can personalize retail promotions. <a href="https://electricera.tech/products/halo-ai" style="color:inherit;">Learn more about HaloAI.</a></p>
         </div>
       </div>
 <div style="border-radius:var(--r);overflow:hidden;">
-        <img src="https://github.com/jordanmcon/ev-project-intake/blob/main/images/RE400-Square.avif?raw=true" alt="RE400 Charging Station" style="width:100%;height:auto;display:block;border-radius:var(--r);">
+        <iframe width="560" height="315" src="https://www.youtube.com/embed/aBMdtmo40gE?si=Bo15X_QBENPfwPsl" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
       </div>
     </div>
     <div class="cta-row">
@@ -772,7 +775,7 @@ function toggleRetailNone(el){
 function retailHint(){
   const n=S.retailPrograms.filter(p=>p!=='none').length;
   if(!n)return'';
-  return`${n} program${n>1?'s':''} selected → ${['','$10,500','$14,500','$24,500'][n]||'$24,500'} per port / year`;
+  return`${n} program${n>1?'s':''} selected → ${['$14,000','$14,000','$18,000','$28,000'][n]||'$28,000'} per port / year`;
 }
 function toggleAddon(key,el){
   S[key]=!S[key];
