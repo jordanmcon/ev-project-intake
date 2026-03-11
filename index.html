@@ -409,7 +409,7 @@ const SLIDES = [
         <p style="font-size:0.8rem;color:var(--muted);margin-top:10px;font-family:var(--mono);">No commitment required</p>
       </div>
       <div style="flex-shrink:0;">
-        <img src="https://raw.githubusercontent.com/jordanmcon/ev-project-intake/5f4bfb28d1a519a8be7767c83c012d718a3a02b7/images/RE400Hero.png" alt="Electric Era EV Charging Station" style="height:400px;width:auto;display:block;filter:drop-shadow(0 0 40px rgba(248,185,24,0.12));">
+        <img src="https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/690c523da5f523877ed93c58_6efd0c0b558896509e33f5a0df660b7a_battery-advanced-image-mobile.avif" alt="Electric Era EV Charging Station" style="height:400px;width:auto;display:block;filter:drop-shadow(0 0 40px rgba(248,185,24,0.12));">
       </div>
     </div>
   `, valid:()=>true },
@@ -534,7 +534,7 @@ const SLIDES = [
         </div>
       </div>
     <div style="border-radius:var(--r);overflow:hidden;">
-        <img src="https://github.com/jordanmcon/ev-project-intake/blob/main/images/EnergyManagementPlanChart.png?raw=true" alt="Energy Management Plan Chart" style="width:100%;height:auto;display:block;border-radius:var(--r);">
+        <img src="https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/69b1e1734782a48c135b4264_EnergyManagementPlanChart.png" alt="Energy Management Plan Chart" style="width:100%;height:auto;display:block;border-radius:var(--r);">
       </div>
     </div>
     <div class="cta-row">
@@ -725,10 +725,10 @@ function updateProgress(){
 
 // ── HELPERS ──────────────────────────────────────────────────
 const BATTERY_MEDIA = {
-  'none':   'https://github.com/jordanmcon/ev-project-intake/blob/main/images/EE%20Animation%20-%20No%20Battery.gif?raw=true',
-  '125kw':  'https://github.com/jordanmcon/ev-project-intake/blob/main/images/EE%20Animation%20-%20Battery.gif?raw=true',
-  '250kw':  'https://github.com/jordanmcon/ev-project-intake/blob/main/images/EE%20Animation%20-%20Big%20Battery.gif?raw=true',
-  'unsure': 'https://github.com/jordanmcon/ev-project-intake/blob/main/images/EnergyManagementPlanChart.png?raw=true',
+  'none':   'https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/69b1e1b9c3761cea8ddb0b96_EE%20Animation%20-%20No%20Battery.gif',
+  '125kw':  'https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/69b1e1bce1810aa703a2ddb8_EE%20Animation%20-%20Battery.gif',
+  '250kw':  'https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/69b1e1b93b6bcd565e53a747_EE%20Animation%20-%20Big%20Battery.gif',
+  'unsure': 'https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/69b1e1734782a48c135b4264_EnergyManagementPlanChart.png',
 };
 function getBatteryMediaSrc(val){ return BATTERY_MEDIA[val] || ''; }
 function updateBatteryMedia(val){
