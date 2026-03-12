@@ -61,7 +61,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 @keyframes sDown{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-16px)}}
 
 .eyebrow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:0.8rem;letter-spacing:.13em;color:var(--gold);text-transform:uppercase;margin-bottom:13px}
-.eyebrow::before{content:'';width:16px;height:1px;background:var(--gold);opacity:.7}
 .slide h1{font-size:clamp(28px,3.8vw,38px);font-weight:400;line-height:1.18;letter-spacing:-.025em;margin-bottom:7px}
 .slide h1 em{font-style:normal;color:var(--gold)}
 .slide .sub{font-size:1.02rem;color:var(--dim);line-height:1.4;margin-bottom:26px;max-width:480px}
@@ -400,9 +399,9 @@ const SLIDES = [
   { step:1, render:()=>`
     <div style="display:grid;grid-template-columns:1fr auto;gap:32px;align-items:center;">
       <div>
-        <div class="eyebrow">Step 1 — Project Intake</div>
+        <div class="eyebrow">Project Intake</div>
         <h1>Let's build your <em>EV charging</em> project.</h1>
-        <p class="sub">A few quick questions to understand your goals, configure your station, and generate a custom quote. Takes about 5 minutes.</p>
+        <p class="sub">This project intake comprises a few quick questions to understand your goals, configure your station, and generate a custom quote. It takes about 5 minutes.</p>
         <div class="cta-row">
           <button class="btn btn-primary" onclick="next()">Get started <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
@@ -416,15 +415,15 @@ const SLIDES = [
 
   // 1 — REASON (multi-select)
   { step:1, render:()=>`
-    <div class="eyebrow">Step 1 — Project Intake</div>
+    <div class="eyebrow">Project Intake</div>
     <h1>Why are you interested in <em>EV charging</em>?</h1>
     <p class="sub">Select all that apply.</p>
     <div class="checks g2">
       ${[
-        ['revenue-loss','','I want to add a new revenue stream','EV drivers are choosing locations with chargers'],
-        ['competitive','','Competitive pressure','Peers and competitors are already deploying'],
-        ['brand','','Brand modernization','Align your brand with sustainability and innovation'],
-        ['compliance','','Compliance (e.g., EV mandates)','Regulatory need such as a building code mandate'],
+        ['revenue-loss','','New revenue stream','I want to attract EV drivers who are choosing locations with chargers'],
+        ['competitive','','Competitive pressure','I see peers and competitors already deploying EV charging'],
+        ['brand','','Brand modernization','I want to align your brand with sustainability and innovation'],
+        ['compliance','','Compliance','I am facing regulatory requirements, such as building code mandates'],
         ['other','','Other',''],
       ].map(([v,icon,t,sub])=>`
         <div class="check-card ${S.reasons.includes(v)?'sel':''}" onclick="toggleArr('reasons','${v}',this)">
@@ -441,7 +440,7 @@ const SLIDES = [
 
   // 2 — CONTACT
   { step:1, render:()=>`
-    <div class="eyebrow">Step 1 — Project Intake</div>
+    <div class="eyebrow">Project Intake</div>
     <h1>Tell us about <em>yourself</em>.</h1>
     <p class="sub">We'll use this to personalize your quote.</p>
     <div class="g2f">
@@ -476,7 +475,7 @@ const SLIDES = [
 
   // 3 — SITE + STALLS + BUDGET
   { step:1, render:()=>`
-    <div class="eyebrow">Step 1 — Project Intake</div>
+    <div class="eyebrow">Project Intake</div>
     <h1>Tell us about your <em>project site</em>.</h1>
     <div class="field"><label>Project site address (include city, state)</label><input type="text" style="border-style:solid;border-color:#F8B918;" id="siteAddress" placeholder="123 Main St, Seattle, WA" value="${S.siteAddress}" oninput="S.siteAddress=this.value"><div class="ferr" id="e-siteAddress">Required</div></div>
     <div class="field" style="margin-bottom:22px;">
@@ -516,15 +515,14 @@ const SLIDES = [
 
   // 4 — BATTERY INTERSTITIAL
   { step:2, render:()=>`
-    <div class="eyebrow">Step 2 — Energy Management Plan</div>
+    <div class="eyebrow">Energy Management Plan</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:8px;">
       <div>
         <h1 style="margin-bottom:18px;">Understanding <em>energy management</em>.</h1>
         <div style="font-size:1.02rem;color:var(--dim);line-height:1.7;">
           <p style="margin-bottom:14px;">Choosing the right energy management solution can reduce utility <a href="https://pluginamerica.org/understanding-demand-charges/" style="color:inherit;">demand charges</a>, accelerate implementation timelines, unlock power capacity above the grid, and improve station profitability.</p>
-          <p style="margin-bottom:14px;">Electric Era leads the industry in energy management. Our patented software paired with on-site battery storage can deliver a fast charging station that exceeds the grid connection and keeps your demand charges low. On the next page, let us know what size battery you would like with your station.
+          <p style="margin-bottom:14px;">Electric Era leads the industry in energy management. Our patented software paired with on-site battery storage can deliver a fast charging station that exceeds the grid connection and keeps your demand charges low. <b> On the next page, let us know what size battery you would like with your station. </b>
 </p>          
-          <p style="margin-top:14px; margin-bottom:14px;">Not sure about your demand charges? Ask your utility.</p>
          <p style="margin-bottom:14px;">Resources:</p>
          <ul style="padding-left:18px;">
                      <li><a href="https://ev-p-and-l.vercel.app/" style="color:inherit;font-size:1rem;"> [Tool] Forecast station utilization (sessions per day) </a></li>
@@ -550,7 +548,8 @@ const SLIDES = [
     <div class="battery-layout">
       <div>
         <p class="sub" style="margin-bottom:14px;">Retailers often select a battery to lower their utility bill, accelerate installation, and optimize charging performance at busy sites. Select your battery preference.</p>
-        <div class="battery-choices">
+        <p style="margin-top:14px; margin-bottom:14px;">If you're not sure about your demand charges, select "Not Sure" and an Electric Era representative can help you out.</p>
+ <div class="battery-choices">
           ${[
             ['none','','No battery','Direct grid connection only'],
             ['125kw','','125 kW Battery','Best for moderate demand charges ($5–$14/kW/month)'],
@@ -663,9 +662,9 @@ const SLIDES = [
     </div>
     <div class="addon-list">
       ${[
-        ['addDesign','','Design Services','Site design and site feasibility study'],
+        ['addDesign','','Design Services','Survey, feasibility assessment, site design'],
         ['addEPC','','EPC Management','Engineering, permits, utility coordination, and project management'],
-        ['addConstruction','','Construction','Site prep, trenching, installation'],
+        ['addConstruction','','Construction','Site preparation, trenching, installation'],
       ].map(([key,icon,name,desc])=>`
         <div class="addon ${S[key]?'sel':''}" onclick="toggleAddon('${key}',this)">
           <div class="addon-l"><div class="addon-icon">${icon}</div><div><div class="addon-name">${name}</div><div class="addon-desc">${desc}</div></div></div>
@@ -995,7 +994,7 @@ async function showQuote(){
 
 function renderQuote(){
   const p=calcPricing();
-  const rLabels={'revenue-loss':'Losing EV traffic revenue','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance','other':'Other'};
+  const rLabels={'revenue-loss':'New revenue stream','competitive':'Competitive pressure','brand':'Brand modernization','compliance':'Compliance','other':'Other'};
   const btLabel={none:'None','125kw':'125 kW System','250kw':'250 kW System',unsure:'Not Sure'}[S.battery]||'—';
   const budgetLabel={allocated:'Direct purchase',financed:'Financing / subscription model'}[S.budget]||'—';
   const startLabel=S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
@@ -1008,9 +1007,9 @@ function renderQuote(){
     :'Standard charging software (no retail programs)';
 
   const addonRows=[
-    S.addDesign?['Design Services','Site design and site feasibility study',fmt(p.design)]:null,
+    S.addDesign?['Design Services','Survey, feasibility assessment, site design',fmt(p.design)]:null,
     S.addEPC?['EPC Management','Engineering, permitting, utility coordination, and project management',fmt(p.epc)]:null,
-    S.addConstruction?['Construction Management','Site prep, trenching, and installation oversight',fmt(p.construction)]:null,
+    S.addConstruction?['Construction Management','Site preparation, trenching, and installation',fmt(p.construction)]:null,
   ].filter(Boolean);
 
   return `
@@ -1043,6 +1042,10 @@ function renderQuote(){
 </svg></div>
         <div style="margin-top:22px"><div class="q-title">EV Charging Project Quote</div><div class="q-subtitle">Prepared for ${S.firstName} ${S.lastName}</div></div>
       </div>
+         <div class="q-actions">
+      <button class="btn btn-ghost" onclick="savePdf()">Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+      
       <div class="q-meta"><div class="q-id">Quote #${S.quoteId}</div><div class="q-date">${S.quoteDate}</div><div class="q-badge">ESTIMATE</div></div>
     </div>
 
@@ -1064,14 +1067,14 @@ function renderQuote(){
       <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">DC Fast Charging Stations — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era kiosks with integrated retail media display</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
-<div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW battery energy storage system','250kw':'250 kW battery energy storage system',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>      </div>
+<div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment','250kw':'250 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>      </div>
     </div>
 
     <div class="q-sec">
       <div class="q-sec-title-row"><div class="q-sec-title">Electric Era Experiences & Standard O&M</div><button class="q-edit-btn" onclick="goBackFromQuote(7)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">Electric Era Platform${activePrograms.length?' + Retail Programs':''}</div><div class="q-row-desc">${softwareDesc}</div></div><div class="q-price ${p.software>0?'gold':'dim'}">${p.software>0?fmt(p.software)+'/year':'Included'}</div></div>
-        ${p.batteryOM>0?`<div class="q-row"><div><div class="q-row-name">Battery O&M</div><div class="q-row-desc">Annual maintenance & monitoring for battery energy storage system</div></div><div class="q-price gold">${fmt(p.batteryOM)}/year</div></div>`:''}
+        ${p.batteryOM>0?`<div class="q-row"><div><div class="q-row-name">Battery O&M</div><div class="q-row-desc">Warranty, maintenance & monitoring for battery energy storage system</div></div><div class="q-price gold">${fmt(p.batteryOM)}/year</div></div>`:''}
       </div>
     </div>
 
@@ -1084,7 +1087,7 @@ function renderQuote(){
     </div>`:''}
 
     <div class="q-total" style="${S.grant ? 'border-bottom-left-radius:4px;border-bottom-right-radius:4px;margin-bottom:0;border-bottom-color:var(--border);' : ''}">
-      <div><div class="qt-label">Estimated Total Investment</div><small>Hardware + battery + Year 1 software + services · excl. utility upgrade costs</small></div>
+      <div><div class="qt-label">Estimated Total Investment</div><small>CapEx + Year 1 OpEx</small></div>
       <div class="qt-amount">${fmt(p.subtotal)}</div>
     </div>
 
@@ -1136,20 +1139,18 @@ function renderQuote(){
       <div><div class="q-note-title">Next Steps</div><div class="q-note-body">
       <ul style="padding-left:18px;">
       <li>Check your email inbox for a record of your quote</li>
-      <li> Review the <a href="[ADD URL]" style="text-decoration: underline;color:var(--gold);">>Terms and Conditions</a></li>
+      <li> Review the <a href="https://electricera.tech/terms-conditions" style="text-decoration: underline;color:var(--gold);">>Terms and Conditions</a></li>
       <li>An Electric Era representative will reach out shortly to kick off a site assessment</li>
       <li> An Electric Era engineer will be assigned to create a site layout</li>
       <li> Explore:<a href="https://ev-p-and-l.vercel.app/" style="text-decoration: underline;color:var(--gold);"> Forecast charging sessions, growth, and ROI for your location </a> </li>
       <li> Explore:<a href="https://ev-charging-retail-experiences.vercel.app/" style="text-decoration: underline;color:var(--gold);"> Calculate the value of extending your existing retail programs to EV charging </a> </li>
       </ul>
-     <p><em> Note that Section 48E tax credits are not reflected above and may significantly reduce your net investment. </em></p></div></div>
     </div>
 
     <div class="q-actions">
-      <button class="btn btn-ghost" onclick="savePdf()">Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <button class="btn btn-ghost" onclick="restart()">Start over</button>
+      <button class="btn btn-ghost" onclick="restart()" style="font-size:0.8rem;color:var(--muted);">Start another project</button>
     </div>
-    <div class="q-disclaimer">This estimate is for planning purposes only and is not a binding offer. Final pricing is subject to site survey, utility assessment, and hardware availability. Quote valid for 30 days from generation date.</div>
+    <div class="q-disclaimer">This estimate is for planning purposes only and is not a binding offer. Final pricing is subject to site review.</div>
   `;
 }
 
@@ -1162,9 +1163,9 @@ function buildGantt(completionDateStr) {
     ['Project Initiation',   0,   1,   '#F8B918'],
     ['Feasibility Phase',    1,   26,  '#d4a017'],
     ['Design & Permitting',  27,  90,  '#c49010'],
-    ['Procurement',          27,  132, '#a07820'],
+    ['Production',          27,  132, '#a07820'],
     ['Construction',         159, 37,  '#F8B918'],
-    ['Utility Construction', 159, 44,  '#d4a017'],
+    ['Utility', 159, 44,  '#d4a017'],
     ['Site Activation',      196, 15,  '#a0a0a0'],
   ];
 
