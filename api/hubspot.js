@@ -80,11 +80,42 @@ export default async function handler(req, res) {
     console.log('dealProperties received:', dealProperties ? JSON.stringify(dealProperties) : 'none');
     if (dealProperties && contactId) {
 
-      // 3a. Create the deal
+      // 3a. Resolve deal owner: look up the contact's associated company owner.
+      //     Falls back to Jordan Con's owner ID if no company or company owner is found.
+      const JORDAN_CON_OWNER_ID = '1846116819';
+      let resolvedOwnerId = JORDAN_CON_OWNER_ID;
+
+      try {
+        // Fetch companies associated with this contact
+        const companyAssocRes = await fetch(
+          `https://api.hubspot.com/crm/v4/objects/contacts/${contactId}/associations/companies`,
+          { method: 'GET', headers }
+        );
+        if (companyAssocRes.ok) {
+          const companyAssocData = await companyAssocRes.json();
+          const companyId = companyAssocData.results?.[0]?.toObjectId;
+          if (companyId) {
+            // Fetch the company to get its owner
+            const companyRes = await fetch(
+              `https://api.hubspot.com/crm/v3/objects/companies/${companyId}?properties=hubspot_owner_id`,
+              { method: 'GET', headers }
+            );
+            if (companyRes.ok) {
+              const companyData = await companyRes.json();
+              const companyOwnerId = companyData.properties?.hubspot_owner_id;
+              if (companyOwnerId) resolvedOwnerId = companyOwnerId;
+            }
+          }
+        }
+      } catch (ownerErr) {
+        console.warn('Owner lookup failed, falling back to default:', ownerErr);
+      }
+
+      // 3b. Create the deal
       const dealRes = await fetch('https://api.hubspot.com/crm/v3/objects/deals', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ properties: dealProperties }),
+        body: JSON.stringify({ properties: { ...dealProperties, hubspot_owner_id: resolvedOwnerId } }),
       });
 
       if (!dealRes.ok) {
@@ -99,7 +130,7 @@ export default async function handler(req, res) {
       const dealData = await dealRes.json();
       const dealId = dealData.id;
 
-      // 3b. Associate deal → contact using the v4 associations API
+      // 3c. Associate deal → contact using the v4 associations API
       const assocRes = await fetch(
         `https://api.hubspot.com/crm/v4/objects/deals/${dealId}/associations/contacts/${contactId}`,
         {
