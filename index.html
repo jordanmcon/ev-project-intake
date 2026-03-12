@@ -422,7 +422,7 @@ const SLIDES = [
       ${[
         ['revenue-loss','','New revenue stream','I want to attract EV drivers who are choosing locations with chargers'],
         ['competitive','','Competitive pressure','I see peers and competitors already deploying EV charging'],
-        ['brand','','Brand modernization','I want to align your brand with sustainability and innovation'],
+        ['brand','','Brand modernization','I want to align my brand with sustainability and innovation'],
         ['compliance','','Compliance','I am facing regulatory requirements, such as building code mandates'],
         ['other','','Other',''],
       ].map(([v,icon,t,sub])=>`
@@ -812,7 +812,7 @@ function makeDatePills(){
     const d=new Date(now.getFullYear(),now.getMonth()+i,1);
     const mo=d.toLocaleString('default',{month:'short'}),yr=d.getFullYear(),full=d.toLocaleString('default',{month:'long'});
     const val=`${yr}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    h+=`<div class="date-pill ${S.startDate===val?'sel':''}" onclick="selectDate('${val}',this)"><div class="dp-mo">${mo} ${yr}</div><div class="dp-full">${full}</div></div>`;
+    h+=`<div class="date-pill ${S.startDate===val?'sel':''}" onclick="selectDate('${val}',this)"><div class="dp-mo">${mo} ${yr}</div></div>`;
   }
   return h;
 }
