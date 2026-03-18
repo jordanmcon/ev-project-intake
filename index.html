@@ -375,7 +375,7 @@ const SLIDES = [
     <p class="sub">One site or a full portfolio — enter addresses one per line and click Add, or import a CSV with one address per row.</p>
     <div class="field">
       <label>Site address(es)</label>
-      <textarea id="siteInput" placeholder="123 Main St, Seattle, WA&#10;456 Oak Ave, Portland, OR&#10;789 Elm Rd, Spokane, WA"
+      <textarea id="siteInput" placeholder="123 Main St, Seattle, WA&"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSitesFromText();}"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
         <button class="btn btn-ghost btn-sm" onclick="addSitesFromText()">+ Add</button>
@@ -407,9 +407,9 @@ const SLIDES = [
   { render: () => `
     <div class="eyebrow">Step 2 — Station Configuration</div>
     <h1>How many <em>charging stalls</em>?</h1>
-    <p class="sub">Each stall is one RE400 charger delivering up to 400 kW. Select the option that best fits your site.</p>
+    <p class="sub">Each stall has one RE400 charger delivering up to 400 kW. Select the option that best fits your sites.</p>
     <div class="stall-grid">
-      ${[2,4,6,8,10,12,16,20].map(n => `
+      ${[4,6,8,10,12].map(n => `
         <div class="stall-tile ${S.stalls===n?'sel':''}" onclick="pickStalls(${n},this)">
           <div class="st-num">${n}</div>
           <div class="st-kw">400 kW / port</div>
@@ -596,7 +596,7 @@ async function showQuote() {
         <div class="fee-hero-eyebrow">${isPortfolio ? 'Total portfolio monthly fee' : 'Monthly subscription fee'}</div>
         <div class="fee-hero-amount">${fmt(portMonthly)}</div>
         <div class="fee-hero-per">per month · fixed for 10-year term${isPortfolio ? ' · '+n+' sites' : ''}</div>
-        <div class="fee-hero-sub">${fmt(portAnnual)}/yr · ${fmt(port10yr)} over full term${anyLCFS ? ' · <span style="color:var(--gold);">LCFS credits applied</span>' : ''}</div>
+        <div class="fee-hero-sub">${fmt(portAnnual)}/yr · ${fmt(port10yr)} over full term · CaaS fee is inclusive of LCFS credits where applicable</div>
       </div>
       <div class="metric-strip ${isPortfolio ? 'cols-3' : 'cols-2'}">
         ${isPortfolio ? `
@@ -623,31 +623,11 @@ async function showQuote() {
     <div class="q-sec">
       <div class="q-sec-title">Fee by site</div>
       <div class="data-table">
-        <div class="dt-head port-cols"><span>Site address</span><span>Monthly</span><span>Annual</span><span class="hide-sm">10-Yr total</span><span class="hide-sm">Est. SPD</span></div>
+        <div class="dt-head port-cols"><span>Site address</span><span>Monthly</span><span>Annual</span><span class="hide-sm">10-Yr total</span><span class="hide-sm">Est. SPD (Yr 1)</span></div>
         ${siteRows}
         <div class="dt-total port-cols"><span>Portfolio total</span><span>${fmt(portMonthly)}</span><span>${fmt(portAnnual)}</span><span class="hide-sm">${fmt(port10yr)}</span><span class="hide-sm"></span></div>
       </div>
-      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">SPD = sessions per day. Estimated from H3 hex utilization model based on site location.</p>
-    </div>` : ''}
-
-    <!-- LCFS -->
-    ${anyLCFS ? `
-    <div class="q-sec">
-      <div class="q-sec-title">Clean fuel credits (LCFS / CFP)</div>
-      <div style="background:var(--s2);border:1px solid var(--gold-border);border-radius:var(--r);overflow:hidden;">
-        ${siteResults.filter(s=>s.lcfs).map(sd=>`
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 17px;border-bottom:1px solid var(--border);gap:12px;">
-          <div>
-            <div style="font-size:0.9rem;color:var(--text);">${sd.address}</div>
-            <div style="font-size:0.75rem;font-family:var(--mono);color:var(--muted);margin-top:2px;">WA / OR / CA clean fuel program · ${fmt(LCFS_CREDIT_ANNUAL)}/yr credit</div>
-          </div>
-          <div style="text-align:right;flex-shrink:0;">
-            <div style="font-family:var(--mono);font-size:0.95rem;color:var(--gold);">−${fmt(sd.fee.annualCredit)}/yr</div>
-            <div style="font-size:0.72rem;font-family:var(--mono);color:var(--muted);">−${fmt(sd.fee.totalCredits)} over term</div>
-          </div>
-        </div>`).join('')}
-        <div style="padding:11px 17px;font-size:0.78rem;font-family:var(--mono);color:var(--muted);">Credits reduce the required subscription fee. Shown fees already reflect this reduction.</div>
-      </div>
+      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">SPD = sessions per day. Estimated from Paren EV Sessions data.</p>
     </div>` : ''}
 
     <!-- UTILIZATION -->
@@ -671,24 +651,24 @@ async function showQuote() {
           if (sd.status !== 'found') return `<div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:14px 17px;font-size:0.9rem;color:var(--muted);">Not enough data — no utilization estimate available for this location.</div>`;
           return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
             <div class="metric-card">
-              <div class="metric-label">Est. sessions / day</div>
+              <div class="metric-label">Est. sessions / day (Yr 1)</div>
               <div class="metric-val" style="color:var(--gold);">${sd.spd.toFixed(1)}</div>
               <div class="metric-sub">Based on nearby station data</div>
             </div>
             <div class="metric-card">
-              <div class="metric-label">Est. sessions / month</div>
+              <div class="metric-label">Est. sessions / month (Yr 1)</div>
               <div class="metric-val">${Math.round(sd.spd * 30.4)}</div>
               <div class="metric-sub">30.4-day average</div>
             </div>
             <div class="metric-card">
-              <div class="metric-label">Est. sessions / year</div>
+              <div class="metric-label">Est. sessions / year (Yr 1)</div>
               <div class="metric-val">${Math.round(sd.spd * 365)}</div>
               <div class="metric-sub">Annualized</div>
             </div>
           </div>`;
         }
       })()}
-      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">Utilization estimates are derived from an H3 hex-level model based on historical EV charging activity near each site. Actual results will vary.</p>
+      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">Utilization estimates are derived from Paren EV Sessions data. Actual results will vary.</p>
     </div>
 
     <!-- STATION DETAILS -->
@@ -704,31 +684,16 @@ async function showQuote() {
       </div>
     </div>
 
-    <!-- 10-YR OPEX SCHEDULE -->
-    <div class="q-sec">
-      <div class="q-sec-title">10-Year fee schedule — per site</div>
-      <div class="data-table">
-        <div class="dt-head opex-cols"><span>Year</span><span>Est. OpEx</span><span>Annual Fee</span><span class="hide-sm">Fee − OpEx</span><span class="hide-sm">Margin</span></div>
-        ${opexRows}
-        <div class="dt-total opex-cols">
-          <span>Total</span><span>${fmt(r.totalOpex)}</span><span>${fmt(r.total10)}</span>
-          <span class="hide-sm">${fmt(r.total10-r.totalOpex)}</span>
-          <span class="hide-sm">${totalMargin}%</span>
-        </div>
-      </div>
-      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">OpEx includes management, O&M, and insurance (2–5%/yr escalation). Subscription fee is fixed for the contract term.</p>
-    </div>
-
     <!-- INCLUSIONS -->
     <div class="q-sec">
       <div class="q-sec-title">What's included</div>
       <div class="inc-list">
         ${[
-          ['Hardware procurement & installation', 'RE400 charger equipment, civil, electrical, and permitting coordination.'],
+          ['EV charging strategy',              'Pricing strategy, operational strategy, and operations management'], 
+          ['Hardware procurement & installation', 'RE400 charger equipment, electrical, and permitting coordination.'],
           ['Full-term operations & maintenance',  'Preventative and corrective maintenance included for 10 years.'],
           ['HaloAI on-charger software',          'Driver support, remote diagnostics, and retail experience features.'],
           ['Network & connectivity',              'LTE/WiFi, OCPP compliance, and cloud monitoring included.'],
-          ['Asset ownership & end-of-life',       'Electric Era retains ownership; hardware refresh options at term end.'],
         ].map(([t,s]) => `
           <div class="inc-item">
             <span class="inc-ck">✓</span>
@@ -743,7 +708,7 @@ async function showQuote() {
     </div>
 
     <div class="q-disclaimer">
-      This quote is indicative and for discussion purposes only. All figures are estimates based on Electric Era's financial model as of ${S.quoteDate}. Actual CaaS fees are subject to final site assessment, utility tariff review, and executed contract terms. © ${new Date().getFullYear()} Electric Era Technologies, Inc.
+      This quote is indicative and for discussion purposes only. All figures are estimates based on Electric Era's financial model as of ${S.quoteDate}. Actual CaaS fees are subject to final site assessment. © ${new Date().getFullYear()} Electric Era Technologies, Inc.
     </div>
   `;
 
