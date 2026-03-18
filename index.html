@@ -464,7 +464,7 @@ let cur = 0;
 function renderProgress() {
   const n = SLIDES.length, pct = Math.round((cur+1)/n*100);
   document.getElementById('prog-bar').style.width = pct+'%';
-  document.getElementById('prog-lbl').textContent = `Slide ${cur+1} of ${n}`;
+  document.getElementById('prog-lbl').textContent = `Step ${cur} of ${n-1}`;
   document.getElementById('dots').innerHTML = SLIDES.map((_,i) =>
     `<div class="dot ${i===cur?'on':i<cur?'done':''}" ${i<cur?`onclick="jumpTo(${i})" style="cursor:pointer"`:''} ></div>`
   ).join('');
