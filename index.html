@@ -374,7 +374,7 @@ const SLIDES = [
     <h1>Enter your <em>site address${S.sites.length!==1?'es':''}</em>.</h1>
     <p class="sub">One site or a full portfolio — enter addresses one per line and click Add, or import a CSV with one address per row.</p>
     <div class="field">
-      <label>Site address(es)</label>
+      <label>Site address(es) — include city and state</label>
       <textarea id="siteInput" placeholder="123 Main St, Seattle, WA"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSitesFromText();}"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
@@ -409,7 +409,7 @@ const SLIDES = [
     <h1>How many <em>charging stalls</em>?</h1>
     <p class="sub">Each stall has one RE400 charger delivering up to 400 kW. Select the option that best fits your sites.</p>
     <div class="stall-grid">
-      ${[4,6,8,10,12].map(n => `
+      ${[4,6,8,10].map(n => `
         <div class="stall-tile ${S.stalls===n?'sel':''}" onclick="pickStalls(${n},this)">
           <div class="st-num">${n}</div>
           <div class="st-kw">400 kW / port</div>
