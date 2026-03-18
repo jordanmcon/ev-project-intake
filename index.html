@@ -240,10 +240,10 @@ const S = {
   quoteId: '', quoteDate: '',
 };
 
-const FIXED_IRR = 10.0;  // not exposed to user
+const FIXED_IRR = 12.0;  // not exposed to user
 
 // ── PRICING MODEL ────────────────────────────────────────────
-// RE400 = 400 kW per stall (2×200 kW dispensers)
+// RE400 = 400 kW per stall
 // Base from XLSX: 4 stalls, no battery → $514,500 CapEx
 // Per-stall hardware cost derived from base
 const CAPEX_PER_STALL   = 514500 / 4;   // ~$128,625
