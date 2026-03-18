@@ -543,7 +543,7 @@ async function showQuote() {
   const port10yr    = siteResults.reduce((a, s) => a + s.fee.total10, 0);
   const anyLCFS     = siteResults.some(s => s.lcfs);
 
-  const batteryLabels  = { none:'None', '125kw':'125 kW Nexus BESS', '250kw':'250 kW Nexus BESS' };
+  const batteryLabels  = { none:'None', '125kw':'125 kW BESS', '250kw':'250 kW BESS' };
 
   // Per-site opex rows
   const opexRows = r.opex.map((v,i) => {
