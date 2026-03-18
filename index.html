@@ -375,7 +375,7 @@ const SLIDES = [
     <p class="sub">One site or a full portfolio — enter addresses one per line and click Add, or import a CSV with one address per row.</p>
     <div class="field">
       <label>Site address(es)</label>
-      <textarea id="siteInput" placeholder="123 Main St, Seattle, WA&"
+      <textarea id="siteInput" placeholder="123 Main St, Seattle, WA"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSitesFromText();}"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
         <button class="btn btn-ghost btn-sm" onclick="addSitesFromText()">+ Add</button>
@@ -433,14 +433,14 @@ const SLIDES = [
   { render: () => `
     <div class="eyebrow">Step 2 — Station Configuration</div>
     <h1>Do you want to add a <em>battery</em>?</h1>
-    <p class="sub">On-site battery storage lowers utility demand charges, boosts charging capacity above your grid limit, and improves station resilience.</p>
+    <p class="sub">On-site battery storage lowers utility demand charges, boosts charging capacity above your grid limit, accelerates deployment timelines, and improves station resilience.</p>
     <div class="choices">
       ${[
         ['none',  'No battery',        'Direct grid connection only.',
-         'Best for sites with low demand charges and reliable grid supply.'],
-        ['125kw', '125 kW Battery',    'Nexus BESS · 125 kW / 250 kWh',
+         'Best for sites with no or low demand charges and sufficient grid supply.'],
+        ['125kw', '125 kW Battery',    '125 kW / 250 kWh',
          'Best for moderate demand charges ($5–$14/kW/month) or sites near grid capacity.'],
-        ['250kw', '250 kW Battery',    'Nexus BESS · 250 kW / 500 kWh',
+        ['250kw', '250 kW Battery',    '250 kW / 500 kWh',
          'Best for high demand charges ($14+/kW/month) or high-utilization sites.'],
       ].map(([v, t, tag, d], i) => `
         <div class="choice ${S.battery===v?'sel':''}" onclick="pick('battery','${v}',this)">
@@ -708,7 +708,7 @@ async function showQuote() {
     </div>
 
     <div class="q-disclaimer">
-      This quote is indicative and for discussion purposes only. All figures are estimates based on Electric Era's financial model as of ${S.quoteDate}. Actual CaaS fees are subject to final site assessment. © ${new Date().getFullYear()} Electric Era Technologies, Inc.
+      This quote is indicative and for discussion purposes only. Actual CaaS fees are subject to final site assessment. © ${new Date().getFullYear()} Electric Era Technologies, Inc.
     </div>
   `;
 
