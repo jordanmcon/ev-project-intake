@@ -265,6 +265,33 @@ const PRODUCT_META = {
   re400: { label: 'RE400',        kw: 400 },
 };
 
+// ── LCFS ─────────────────────────────────────────────────────
+const LCFS_STATES = ['CA', 'OR', 'WA', 'CALIFORNIA', 'OREGON', 'WASHINGTON'];
+const LCFS_RATE   = 0.007;  // $/kWh delivered
+
+function isLCFSEligible(address) {
+  const upper = address.toUpperCase();
+  return LCFS_STATES.some(s => new RegExp('\\b' + s + '\\b').test(upper));
+}
+
+// Compute NPV of 10-yr LCFS credits for one site.
+// Credit = LCFS_RATE × 35 kWh/session × SPD × 365, growing 10%/yr.
+// spd = Year-1 sessions/day; r = discount rate (decimal)
+function lcfsCreditNPV(spd, r) {
+  let npv = 0;
+  for (let t = 1; t <= 10; t++) {
+    const spdYr  = spd * Math.pow(1.10, t - 1);
+    const annual = LCFS_RATE * 35 * spdYr * 365;
+    npv += annual / Math.pow(1 + r, t);
+  }
+  return npv;
+}
+
+// Year-1 annual LCFS credit for display purposes
+function lcfsCreditYear1(spd) {
+  return LCFS_RATE * 35 * spd * 365;
+}
+
 // Base OpEx profile (4-stall) from original XLSX — indexed Year 1–10
 const BASE_OPEX_4STALL = [20607,21109,21626,22159,22708,23274,23857,24458,25077,25715];
 
@@ -279,7 +306,7 @@ function buildOpex(stalls) {
 
 
 // ── FINANCIAL ENGINE ─────────────────────────────────────────
-function calcFee(product, stalls, irrPct) {
+function calcFee(product, stalls, irrPct, creditNPV = 0) {
   const capex = buildCapex(product, stalls);
   const opex  = buildOpex(stalls);
   const r = irrPct / 100;
@@ -288,7 +315,7 @@ function calcFee(product, stalls, irrPct) {
     opexNPV += opex[t-1] / Math.pow(1+r, t);
     annuity += 1         / Math.pow(1+r, t);
   }
-  const annual = (capex + opexNPV) / annuity;
+  const annual = (capex + opexNPV - creditNPV) / annuity;
   return {
     monthly:  annual / 12,
     annual,
@@ -296,6 +323,8 @@ function calcFee(product, stalls, irrPct) {
     totalOpex: opex.reduce((a,b) => a+b, 0),
     opex,
     capex,
+    lcfs: creditNPV > 0,
+    creditNPV,
   };
 }
 
@@ -546,8 +575,11 @@ async function showQuote() {
   const siteData = await lookupAllSites(S.sites);
 
   const siteResults = siteData.map(sd => {
-    const fee = calcFee(S.product, S.stalls, FIXED_IRR);
-    return { ...sd, fee };
+    const eligible  = isLCFSEligible(sd.address);
+    const spd1      = (eligible && sd.status === 'found') ? sd.spd : 0;
+    const creditNPV = eligible ? lcfsCreditNPV(spd1, FIXED_IRR / 100) : 0;
+    const fee       = calcFee(S.product, S.stalls, FIXED_IRR, creditNPV);
+    return { ...sd, fee, lcfs: eligible, lcfsCredit1: lcfsCreditYear1(spd1) };
   });
 
   // For single-site convenience
@@ -577,12 +609,14 @@ async function showQuote() {
   }).join('');
   const totalMargin = r.total10>0 ? Math.round((r.total10-r.totalOpex)/r.total10*100) : 0;
 
+  const LCFS_BADGE = `<span style="font-size:0.62rem;font-family:var(--mono);background:rgba(248,185,24,.10);border:1px solid var(--gold-border);border-radius:3px;padding:1px 5px;color:var(--gold);margin-left:6px;vertical-align:middle;letter-spacing:.04em;">LCFS</span>`;
+
   const siteRows = isPortfolio ? siteResults.map(sd => {
     const spdCell = sd.status === 'found'
       ? `<span style="color:var(--gold);">${sd.spd.toFixed(1)}</span>`
       : `<span style="color:var(--muted);font-size:0.76rem;">No data</span>`;
     return `<div class="dt-row port-cols">
-      <span style="color:var(--dim);font-size:0.82rem;">${sd.address}</span>
+      <span style="color:var(--dim);font-size:0.82rem;">${sd.address}${sd.lcfs ? LCFS_BADGE : ''}</span>
       <span>${fmt(sd.fee.monthly)}</span>
       <span>${fmt(sd.fee.annual)}</span>
       <span class="hide-sm">${fmt(sd.fee.total10)}</span>
@@ -596,7 +630,7 @@ async function showQuote() {
         <div>${EE_SVG}</div>
         <div style="margin-top:14px;">
           <div class="q-title">Charging as a Service Quote</div>
-          <div class="q-subtitle">${isPortfolio ? n+'-site portfolio' : S.sites[0]}</div>
+          <div class="q-subtitle">${isPortfolio ? n+'-site portfolio' : S.sites[0]}${!isPortfolio && siteResults[0].lcfs ? ' ' + LCFS_BADGE : ''}</div>
         </div>
       </div>
       <div class="q-meta">
@@ -643,7 +677,7 @@ async function showQuote() {
         ${siteRows}
         <div class="dt-total port-cols"><span>Portfolio total</span><span>${fmt(portMonthly)}</span><span>${fmt(portAnnual)}</span><span class="hide-sm">${fmt(port10yr)}</span><span class="hide-sm"></span></div>
       </div>
-      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">SPD = sessions per day. Estimated from Paren EV Sessions data.</p>
+      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">SPD = sessions per day. Estimated from Paren EV Sessions data.${siteResults.some(s=>s.lcfs) ? ' LCFS credit applied to eligible sites (CA, OR, WA) at $0.007/kWh delivered.' : ''}</p>
     </div>` : ''}
 
     <!-- UTILIZATION -->
@@ -694,6 +728,7 @@ async function showQuote() {
         <div class="q-row"><span class="q-row-name">Charger model</span><span class="q-price">${productMeta.label}</span></div>
         <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls} × ${productMeta.label} (${productMeta.kw} kW each)</span></div>
         <div class="q-row"><span class="q-row-name">Battery storage</span><span class="q-price">None (add-on available)</span></div>
+        ${siteResults[0].lcfs ? `<div class="q-row"><span class="q-row-name">LCFS credit</span><span class="q-price" style="color:var(--gold);">Applied · ${fmt(siteResults[0].lcfsCredit1)}/yr (Yr 1 est.)</span></div>` : ''}
         <div class="q-row"><span class="q-row-name">Number of sites</span><span class="q-price">${n}</span></div>
         <div class="q-row"><span class="q-row-name">Contract term</span><span class="q-price">10 years</span></div>
       </div>
