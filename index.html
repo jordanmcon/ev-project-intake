@@ -260,7 +260,7 @@ const CAPEX = {
 
 // Product display names and per-port kW
 const PRODUCT_META = {
-  base:  { label: 'Base Station', kw: 150 },
+  base:  { label: 'Base Station', kw: 200 },
   re400: { label: 'RE400',        kw: 400 },
 };
 
@@ -277,41 +277,24 @@ function buildOpex(stalls) {
 }
 
 
-// ── LCFS ─────────────────────────────────────────────────────
-const LCFS_STATES = ['CA','OR','WA','CALIFORNIA','OREGON','WASHINGTON'];
-const LCFS_CREDIT_ANNUAL = 20000;  // $ per station per year
-
-function isLCFSEligible(address) {
-  const upper = address.toUpperCase();
-  return LCFS_STATES.some(s => {
-    // Match ", WA" / ", CA" / ", OR" or full state name as word boundary
-    return new RegExp('\\b' + s + '\\b').test(upper);
-  });
-}
-
 // ── FINANCIAL ENGINE ─────────────────────────────────────────
-// annualCredit: annual revenue credit that reduces required fee (e.g. LCFS)
-function calcFee(product, stalls, irrPct, annualCredit = 0) {
+function calcFee(product, stalls, irrPct) {
   const capex = buildCapex(product, stalls);
   const opex  = buildOpex(stalls);
   const r = irrPct / 100;
-  let opexNPV = 0, creditNPV = 0, annuity = 0;
+  let opexNPV = 0, annuity = 0;
   for (let t = 1; t <= 10; t++) {
-    opexNPV   += opex[t-1]      / Math.pow(1+r, t);
-    creditNPV += annualCredit   / Math.pow(1+r, t);
-    annuity   += 1              / Math.pow(1+r, t);
+    opexNPV += opex[t-1] / Math.pow(1+r, t);
+    annuity += 1         / Math.pow(1+r, t);
   }
-  const annual = (capex + opexNPV - creditNPV) / annuity;
+  const annual = (capex + opexNPV) / annuity;
   return {
-    monthly:      annual / 12,
+    monthly:  annual / 12,
     annual,
-    total10:      annual * 10,
-    totalOpex:    opex.reduce((a,b) => a+b, 0),
-    totalCredits: annualCredit * 10,
-    annualCredit,
+    total10:  annual * 10,
+    totalOpex: opex.reduce((a,b) => a+b, 0),
     opex,
     capex,
-    lcfs: annualCredit > 0,
   };
 }
 
@@ -424,7 +407,7 @@ const SLIDES = [
       ${[
         ['base',  'Base Station',
          'https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/690c523da5f523877ed93c58_6efd0c0b558896509e33f5a0df660b7a_battery-advanced-image-mobile.avif',
-         '150 kW per port',
+         '200 kW per port',
          'Reliable DC fast charging in a cost-effective footprint. Ideal for retail, workplace, and multifamily sites with moderate throughput requirements.'],
         ['re400', 'RE400',
          'https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/690c523da5f523877ed93c58_6efd0c0b558896509e33f5a0df660b7a_battery-advanced-image-mobile.avif',
@@ -561,12 +544,9 @@ async function showQuote() {
   // Geocode all sites
   const siteData = await lookupAllSites(S.sites);
 
-  // Per-site LCFS eligibility — each site gets its own fee
   const siteResults = siteData.map(sd => {
-    const lcfs = isLCFSEligible(sd.address);
-    const credit = lcfs ? LCFS_CREDIT_ANNUAL : 0;
-    const fee = calcFee(S.product, S.stalls, FIXED_IRR, credit);
-    return { ...sd, lcfs, credit, fee };
+    const fee = calcFee(S.product, S.stalls, FIXED_IRR);
+    return { ...sd, fee };
   });
 
   // For single-site convenience
@@ -575,11 +555,11 @@ async function showQuote() {
   S.quoteId   = 'CAAS-' + Date.now().toString(36).toUpperCase().slice(-6);
   S.quoteDate = new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
 
+  window._siteResults = siteResults;
   const isPortfolio = n > 1;
   const portMonthly = siteResults.reduce((a, s) => a + s.fee.monthly, 0);
   const portAnnual  = siteResults.reduce((a, s) => a + s.fee.annual,  0);
   const port10yr    = siteResults.reduce((a, s) => a + s.fee.total10, 0);
-  const anyLCFS     = siteResults.some(s => s.lcfs);
 
   const productMeta   = PRODUCT_META[S.product] || { label: S.product, kw: '—' };
 
@@ -600,11 +580,8 @@ async function showQuote() {
     const spdCell = sd.status === 'found'
       ? `<span style="color:var(--gold);">${sd.spd.toFixed(1)}</span>`
       : `<span style="color:var(--muted);font-size:0.76rem;">No data</span>`;
-    const lcfsBadge = sd.lcfs
-      ? `<span style="font-size:0.65rem;font-family:var(--mono);background:rgba(248,185,24,.12);border:1px solid var(--gold-border);border-radius:3px;padding:1px 5px;color:var(--gold);margin-left:5px;vertical-align:middle;">LCFS</span>`
-      : '';
     return `<div class="dt-row port-cols">
-      <span style="color:var(--dim);font-size:0.82rem;">${sd.address}${lcfsBadge}</span>
+      <span style="color:var(--dim);font-size:0.82rem;">${sd.address}</span>
       <span>${fmt(sd.fee.monthly)}</span>
       <span>${fmt(sd.fee.annual)}</span>
       <span class="hide-sm">${fmt(sd.fee.total10)}</span>
@@ -634,7 +611,7 @@ async function showQuote() {
         <div class="fee-hero-eyebrow">${isPortfolio ? 'Total portfolio monthly fee' : 'Monthly subscription fee'}</div>
         <div class="fee-hero-amount">${fmt(portMonthly)}</div>
         <div class="fee-hero-per">per month · fixed for 10-year term${isPortfolio ? ' · '+n+' sites' : ''}</div>
-        <div class="fee-hero-sub">${fmt(portAnnual)}/yr · ${fmt(port10yr)} over full term · CaaS fee is inclusive of LCFS credits where applicable</div>
+        <div class="fee-hero-sub">${fmt(portAnnual)}/yr · ${fmt(port10yr)} over full term</div>
       </div>
       <div class="metric-strip ${isPortfolio ? 'cols-3' : 'cols-2'}">
         ${isPortfolio ? `
@@ -716,7 +693,6 @@ async function showQuote() {
         <div class="q-row"><span class="q-row-name">Charger model</span><span class="q-price">${productMeta.label}</span></div>
         <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls} × ${productMeta.label} (${productMeta.kw} kW each)</span></div>
         <div class="q-row"><span class="q-row-name">Battery storage</span><span class="q-price">None (add-on available)</span></div>
-        <div class="q-row"><span class="q-row-name">LCFS / clean fuel credit</span><span class="q-price" style="${anyLCFS?'color:var(--gold)':''}">${anyLCFS ? fmt(LCFS_CREDIT_ANNUAL)+'/yr per eligible site' : 'Not applicable'}</span></div>
         <div class="q-row"><span class="q-row-name">Number of sites</span><span class="q-price">${n}</span></div>
         <div class="q-row"><span class="q-row-name">Contract term</span><span class="q-price">10 years</span></div>
       </div>
@@ -740,8 +716,19 @@ async function showQuote() {
       </div>
     </div>
 
-    <div class="q-actions">
-      <button class="btn btn-primary" onclick="exportPDF()">Download PDF</button>
+    <!-- P&L CTA -->
+    <div id="pl-cta" style="margin:0 0 18px;">
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:16px 22px;font-size:1.02rem;" onclick="showPL()">
+        <svg viewBox="0 0 14 14" fill="none" style="width:16px;height:16px;"><path d="M1 10l4-4 3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Generate a 10-Year P&amp;L
+      </button>
+    </div>
+
+    <!-- P&L SECTION (hidden until generated) -->
+    <div id="pl-section" style="display:none;"></div>
+
+    <div class="q-actions" style="margin-top:18px;">
+      <button class="btn btn-primary" onclick="exportPDF()">Download PDF <svg viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="backToForm()">← Edit inputs</button>
     </div>
 
@@ -751,6 +738,177 @@ async function showQuote() {
   `;
 
   qp.scrollTop = 0;
+}
+
+
+// ── P&L ENGINE ───────────────────────────────────────────────
+
+// kWh delivered per session — based on product power × avg session duration
+// RE400: 400 kW × 0.25h = 100 kWh; Base Station: 200 kW × 0.25h = 50 kWh
+let PL_STATE = { chargingPrice: 0.50, electricityPrice: 0.12 };
+let PL_DATA  = null;   // { spd, caasAnnual, years[] }
+
+function computePL(spd, caasAnnual, chargingPrice, electricityPrice) {
+  const kwhPerSession = PRODUCT_META[S.product]?.kw * 0.25 || 100;
+  const years = [];
+  let cumulative = 0;
+  let breakevenYear = null;
+  for (let yr = 1; yr <= 10; yr++) {
+    const spdYr      = spd * Math.pow(1.10, yr - 1);   // 10% YoY growth
+    const sessions   = spdYr * 365;
+    const revenue    = sessions * kwhPerSession * chargingPrice;
+    const elecCost   = sessions * kwhPerSession * electricityPrice;
+    const caasFee    = caasAnnual;
+    const netProfit  = revenue - elecCost - caasFee;
+    cumulative      += netProfit;
+    if (breakevenYear === null && cumulative > 0) breakevenYear = yr;
+    years.push({ yr, spdYr, sessions, revenue, elecCost, caasFee, netProfit, cumulative });
+  }
+  const total10Net = years[9].cumulative;
+  // IRR: discount rate where NPV of net cash flows = 0
+  // Using Newton's method
+  const flows = years.map(y => y.netProfit);
+  function npv(r) {
+    return flows.reduce((sum, cf, i) => sum + cf / Math.pow(1 + r, i + 1), 0);
+  }
+  let irr = null;
+  if (flows.some(f => f > 0) && flows.some(f => f < 0)) {
+    let r = 0.15;
+    for (let i = 0; i < 100; i++) {
+      const f  = npv(r);
+      const df = flows.reduce((sum, cf, i) => sum - (i + 1) * cf / Math.pow(1 + r, i + 2), 0);
+      if (Math.abs(df) < 1e-10) break;
+      const rNew = r - f / df;
+      if (Math.abs(rNew - r) < 1e-8) { r = rNew; break; }
+      r = rNew;
+    }
+    if (r > -1 && r < 10) irr = r;
+  } else if (flows.every(f => f > 0)) {
+    irr = Infinity;  // always profitable
+  }
+  return { years, total10Net, breakevenYear, irr };
+}
+
+function renderPL() {
+  if (!PL_DATA) return;
+  const { spd, caasAnnual } = PL_DATA;
+  const cp = PL_STATE.chargingPrice;
+  const ep = PL_STATE.electricityPrice;
+  const result = computePL(spd, caasAnnual, cp, ep);
+  const { years, total10Net, breakevenYear, irr } = result;
+
+  const irrStr = irr === null ? 'N/A'
+               : irr === Infinity ? '> 1000%'
+               : (irr * 100).toFixed(1) + '%';
+  const bkStr  = breakevenYear ? 'Year ' + breakevenYear : 'Not in 10 yrs';
+
+  const rows = years.map(y => `
+    <div class="dt-row" style="display:grid;grid-template-columns:44px 1fr 1fr 1fr 1fr 1fr;gap:4px;align-items:center;padding:8px 14px;">
+      <span style="color:var(--muted);font-family:var(--mono);font-size:0.78rem;">Yr ${y.yr}</span>
+      <span>${fmtK(y.revenue)}</span>
+      <span style="color:#ff8888;">${fmtK(y.elecCost)}</span>
+      <span style="color:#ff8888;">${fmtK(y.caasFee)}</span>
+      <span style="color:${y.netProfit >= 0 ? 'var(--gold)' : '#ff7070'};font-weight:500;">${fmtK(y.netProfit)}</span>
+      <span style="color:${y.cumulative >= 0 ? 'var(--gold)' : 'var(--muted)'};font-family:var(--mono);font-size:0.82rem;">${fmtK(y.cumulative)}</span>
+    </div>`).join('');
+
+  const totalRevenue  = years.reduce((a, y) => a + y.revenue,  0);
+  const totalElec     = years.reduce((a, y) => a + y.elecCost, 0);
+  const totalCaaS     = years.reduce((a, y) => a + y.caasFee,  0);
+
+  document.getElementById('pl-section').innerHTML = `
+    <div style="margin-bottom:24px;">
+
+      <!-- Sliders -->
+      <div class="q-sec" style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:20px 22px;margin-bottom:16px;">
+        <div class="q-sec-title" style="margin-bottom:14px;">P&amp;L assumptions</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+          <div>
+            <label style="display:flex;justify-content:space-between;font-size:0.78rem;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
+              <span>Charging price / kWh</span>
+              <span id="cp-val" style="color:var(--gold);">$${cp.toFixed(2)}</span>
+            </label>
+            <input type="range" id="cp-slider" min="0.30" max="0.70" step="0.01" value="${cp}"
+              style="width:100%;accent-color:var(--gold);"
+              oninput="PL_STATE.chargingPrice=parseFloat(this.value);document.getElementById('cp-val').textContent='$'+parseFloat(this.value).toFixed(2);renderPL();">
+            <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--muted);font-family:var(--mono);margin-top:3px;"><span>$0.30</span><span>$0.70</span></div>
+          </div>
+          <div>
+            <label style="display:flex;justify-content:space-between;font-size:0.78rem;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
+              <span>Electricity cost / kWh</span>
+              <span id="ep-val" style="color:var(--gold);">$${ep.toFixed(2)}</span>
+            </label>
+            <input type="range" id="ep-slider" min="0.05" max="0.30" step="0.01" value="${ep}"
+              style="width:100%;accent-color:var(--gold);"
+              oninput="PL_STATE.electricityPrice=parseFloat(this.value);document.getElementById('ep-val').textContent='$'+parseFloat(this.value).toFixed(2);renderPL();">
+            <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--muted);font-family:var(--mono);margin-top:3px;"><span>$0.05</span><span>$0.30</span></div>
+          </div>
+        </div>
+        <div style="margin-top:14px;font-size:0.72rem;color:var(--muted);font-family:var(--mono);">
+          Session energy: ${(PRODUCT_META[S.product]?.kw * 0.25 || 100).toFixed(0)} kWh/session · SPD grows 10% YoY from ${spd.toFixed(1)} in Year 1
+        </div>
+      </div>
+
+      <!-- Summary metrics -->
+      <div class="metric-strip cols-3" style="margin-bottom:16px;">
+        <div class="metric-card" style="border-color:${total10Net >= 0 ? 'var(--gold-border)' : 'rgba(255,100,100,0.3)'};">
+          <div class="metric-label">10-yr net profit</div>
+          <div class="metric-val" style="color:${total10Net >= 0 ? 'var(--gold)' : '#ff7070'};">${fmt(total10Net)}</div>
+          <div class="metric-sub">After electricity + CaaS fees</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Breakeven year</div>
+          <div class="metric-val">${bkStr}</div>
+          <div class="metric-sub">First year cumulative profit &gt; 0</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">IRR (10-yr)</div>
+          <div class="metric-val">${irrStr}</div>
+          <div class="metric-sub">On net charging cash flows</div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="q-sec-title" style="margin-bottom:8px;">Year-by-year P&amp;L</div>
+      <div class="data-table">
+        <div class="dt-head" style="display:grid;grid-template-columns:44px 1fr 1fr 1fr 1fr 1fr;gap:4px;padding:9px 14px;font-size:0.68rem;letter-spacing:.06em;">
+          <span>Year</span><span>Revenue</span><span>Electricity</span><span>CaaS fee</span><span>Net profit</span><span>Cumulative</span>
+        </div>
+        ${rows}
+        <div class="dt-total" style="display:grid;grid-template-columns:44px 1fr 1fr 1fr 1fr 1fr;gap:4px;padding:9px 14px;">
+          <span style="font-size:0.78rem;">Total</span>
+          <span>${fmt(totalRevenue)}</span>
+          <span>${fmt(totalElec)}</span>
+          <span>${fmt(totalCaaS)}</span>
+          <span style="color:${total10Net >= 0 ? 'var(--gold)' : '#ff7070'};">${fmt(total10Net)}</span>
+          <span></span>
+        </div>
+      </div>
+      <p style="font-size:0.7rem;color:var(--muted);margin-top:8px;font-family:var(--mono);">Revenue and cost projections are illustrative. Actual results will vary based on local conditions.</p>
+    </div>
+  `;
+}
+
+function fmtK(n) {
+  if (Math.abs(n) >= 1000000) return (n < 0 ? '-' : '') + '$' + Math.abs(Math.round(n/1000)/1000).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1000)    return (n < 0 ? '-' : '') + '$' + Math.abs(Math.round(n/1000)) + 'K';
+  return fmt(n);
+}
+
+function showPL() {
+  // Get SPD: use first site, portfolio average, or fallback to 5
+  let spd = 5;
+  if (window._siteResults && window._siteResults.length) {
+    const found = window._siteResults.filter(s => s.status === 'found');
+    if (found.length) spd = found.reduce((a, s) => a + s.spd, 0) / found.length;
+  }
+  const caasAnnual = window._siteResults?.[0]?.fee?.annual || 0;
+
+  PL_DATA = { spd, caasAnnual };
+  document.getElementById('pl-cta').style.display = 'none';
+  document.getElementById('pl-section').style.display = 'block';
+  renderPL();
+  document.getElementById('pl-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function backToForm() {
