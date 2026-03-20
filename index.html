@@ -235,36 +235,47 @@ async function lookupAllSites(sites) {
 // ── STATE ────────────────────────────────────────────────────
 const S = {
   sites:   [],
+  product: null,   // 'base' | 're400'
   stalls:  null,   // set by tile selection
-  battery: null,   // 'none' | '125kw' | '250kw'
   quoteId: '', quoteDate: '',
 };
 
 const FIXED_IRR = 12.0;  // not exposed to user
 
 // ── PRICING MODEL ────────────────────────────────────────────
-// RE400 = 400 kW per stall
-// Base from XLSX: 4 stalls, no battery → $514,500 CapEx
-// Per-stall hardware cost derived from base
-const CAPEX_PER_STALL   = 514500 / 4;   // ~$128,625
-const BATTERY_COST      = { 'none':0, '125kw':123000, '250kw':186000 };
-const BATTERY_OM_ANNUAL = { 'none':0, '125kw':9000,   '250kw':13500  };  // estimated battery O&M
+// Costs sourced from EE_Pricing_for_CaaS_Price_Math.xlsx
+// All stations assumed no battery (battery can be added later per site)
+//
+// CAPEX by product × stall count:
+//   Base Station: Hardware + Software + Design & EPC + Construction
+//   RE400:        Hardware + Software + Design & EPC + Construction
+const CAPEX = {
+  base: { 4: 17000+92000+9500+6000 + 140000 + 71500 + 250000,   // 514000
+           6: 17000+138000+9500+6000 + 270000 + 71500 + 250000,  // 762000
+           8: 184000+17000+9500+6000 + 360000 + 71500 + 250000 },// 898000
+  re400:{ 4: 196000 + 480000 + 71500 + 250000,                   // 997500
+           6: 291000 + 720000 + 71500 + 250000,                   // 1332500
+           8: 386000 + 960000 + 71500 + 250000 },                 // 1667500
+};
 
-// Base OpEx profile (4-stall, no battery) from XLSX — indexed Year 1–10
+// Product display names and per-port kW
+const PRODUCT_META = {
+  base:  { label: 'Base Station', kw: 150 },
+  re400: { label: 'RE400',        kw: 400 },
+};
+
+// Base OpEx profile (4-stall) from original XLSX — indexed Year 1–10
 const BASE_OPEX_4STALL = [20607,21109,21626,22159,22708,23274,23857,24458,25077,25715];
 
-function buildCapex(stalls, battery) {
-  return stalls * CAPEX_PER_STALL + BATTERY_COST[battery];
+function buildCapex(product, stalls) {
+  return CAPEX[product][stalls];
 }
 
-function buildOpex(stalls, battery) {
-  // Scale base opex proportionally to stall count, then add battery O&M
+function buildOpex(stalls) {
   const scale = stalls / 4;
-  const battOM = BATTERY_OM_ANNUAL[battery];
-  return BASE_OPEX_4STALL.map((v, i) =>
-    Math.round(v * scale + battOM * Math.pow(1.02, i))
-  );
+  return BASE_OPEX_4STALL.map(v => Math.round(v * scale));
 }
+
 
 // ── LCFS ─────────────────────────────────────────────────────
 const LCFS_STATES = ['CA','OR','WA','CALIFORNIA','OREGON','WASHINGTON'];
@@ -280,9 +291,9 @@ function isLCFSEligible(address) {
 
 // ── FINANCIAL ENGINE ─────────────────────────────────────────
 // annualCredit: annual revenue credit that reduces required fee (e.g. LCFS)
-function calcFee(stalls, battery, irrPct, annualCredit = 0) {
-  const capex = buildCapex(stalls, battery);
-  const opex  = buildOpex(stalls, battery);
+function calcFee(product, stalls, irrPct, annualCredit = 0) {
+  const capex = buildCapex(product, stalls);
+  const opex  = buildOpex(stalls);
   const r = irrPct / 100;
   let opexNPV = 0, creditNPV = 0, annuity = 0;
   for (let t = 1; t <= 10; t++) {
@@ -344,7 +355,8 @@ function pickStalls(n, el) {
   el.closest('.stall-grid').querySelectorAll('.stall-tile').forEach(t => t.classList.remove('sel'));
   el.classList.add('sel');
   const hint = el.closest('.slide').querySelector('.stall-grid + div');
-  if (hint) hint.innerHTML = `<span style="color:var(--gold);">${n} stalls selected</span> · ${n} × RE400 · 400 kW per port`;
+  const meta = S.product ? PRODUCT_META[S.product] : { label: 'charger', kw: '—' };
+  if (hint) hint.innerHTML = `<span style="color:var(--gold);">${n} stalls selected</span> · ${n} × ${meta.label} · ${meta.kw} kW per port`;
 }
 
 // ── SLIDES ───────────────────────────────────────────────────
@@ -403,60 +415,75 @@ const SLIDES = [
      }
   },
 
-  // 2 — STALL COUNT
+  // 2 — PRODUCT SELECTION
   { render: () => `
-    <div class="eyebrow">Step 2 — Station Configuration</div>
-    <h1>How many <em>charging stalls</em>?</h1>
-    <p class="sub">Each stall has one RE400 charger delivering up to 400 kW. Select the option that best fits your sites.</p>
-    <div class="stall-grid">
-      ${[4,6,8,10].map(n => `
-        <div class="stall-tile ${S.stalls===n?'sel':''}" onclick="pickStalls(${n},this)">
-          <div class="st-num">${n}</div>
-          <div class="st-kw">400 kW / port</div>
+    <div class="eyebrow">Step 2 — Product</div>
+    <h1>Which <em>charging product</em> fits your sites?</h1>
+    <p class="sub">Select the Electric Era charger model you'd like to deploy. Both products are available in 4, 6, or 8 stall configurations.</p>
+    <div class="choices" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      ${[
+        ['base',  'Base Station',
+         'https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/690c523da5f523877ed93c58_6efd0c0b558896509e33f5a0df660b7a_battery-advanced-image-mobile.avif',
+         '150 kW per port',
+         'Reliable DC fast charging in a cost-effective footprint. Ideal for retail, workplace, and multifamily sites with moderate throughput requirements.'],
+        ['re400', 'RE400',
+         'https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/690c523da5f523877ed93c58_6efd0c0b558896509e33f5a0df660b7a_battery-advanced-image-mobile.avif',
+         '400 kW per port',
+         "Electric Era's flagship ultra-fast charger. Designed for high-throughput locations — highway corridors and high-utilization sites — where speed and uptime are critical."],
+      ].map(([v, t, img, tag, d], i) => `
+        <div class="choice ${S.product===v?'sel':''}" onclick="pickProduct('${v}',this)" style="flex-direction:column;align-items:stretch;padding:0;overflow:hidden;gap:0;">
+          <div style="width:100%;height:140px;overflow:hidden;background:var(--s3);position:relative;flex-shrink:0;">
+            <img src="${img}" alt="${t}" style="width:100%;height:100%;object-fit:cover;object-position:center;opacity:0.75;">
+            <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 30%,rgba(14,12,16,0.7) 100%);pointer-events:none;"></div>
+            <div style="position:absolute;bottom:10px;left:14px;right:14px;">
+              <div style="font-size:1.05rem;font-weight:400;color:#fff;">${t}</div>
+              <div style="font-size:0.72rem;font-family:var(--mono);color:var(--gold);margin-top:3px;letter-spacing:.04em;">${tag}</div>
+            </div>
+          </div>
+          <div style="padding:14px 16px 16px;display:flex;gap:10px;align-items:flex-start;">
+            <div class="ck" style="margin-top:1px;flex-shrink:0;">${String.fromCharCode(65+i)}</div>
+            <div class="cd" style="font-size:0.84rem;line-height:1.5;color:var(--muted);">${d}</div>
+          </div>
         </div>`).join('')}
     </div>
-    <div style="font-size:0.78rem;font-family:var(--mono);color:var(--muted);margin-top:6px;">
-      ${S.stalls ? `<span style="color:var(--gold);">${S.stalls} stalls selected</span> · ${S.stalls} × RE400 · 400 kW per port` : 'Select a stall count above'}
-    </div>
-    <div class="ferr" id="e-stalls" style="margin-top:8px;">Please select a stall count.</div>
-    <div class="cta-row">
+    <div class="ferr" id="e-product" style="margin-top:8px;">Please select a product.</div>
+    <div class="cta-row" style="margin-top:20px;">
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
   `, valid: () => {
-      if (!S.stalls) { document.getElementById('e-stalls').style.display='block'; return false; }
-      document.getElementById('e-stalls').style.display='none';
+      if (!S.product) { document.getElementById('e-product').style.display='block'; return false; }
+      document.getElementById('e-product').style.display='none';
       return true;
   }},
 
-  // 3 — BATTERY
-  { render: () => `
-    <div class="eyebrow">Step 2 — Station Configuration</div>
-    <h1>Do you want to add a <em>battery</em>?</h1>
-    <p class="sub">On-site battery storage lowers utility demand charges, boosts charging capacity above your grid limit, accelerates deployment timelines, and improves station resilience.</p>
-    <div class="choices">
-      ${[
-        ['none',  'No battery',        'Direct grid connection only.',
-         'Best for sites with no or low demand charges and sufficient grid supply.'],
-        ['125kw', '125 kW Battery',    '125 kW / 250 kWh',
-         'Best for moderate demand charges ($5–$14/kW/month) or sites near grid capacity.'],
-        ['250kw', '250 kW Battery',    '250 kW / 500 kWh',
-         'Best for high demand charges ($14+/kW/month) or high-utilization sites.'],
-      ].map(([v, t, tag, d], i) => `
-        <div class="choice ${S.battery===v?'sel':''}" onclick="pick('battery','${v}',this)">
-          <div class="ck">${String.fromCharCode(65+i)}</div>
-          <div class="cb">
-            <div class="ct">${t}</div>
-            <div class="c-tag">${tag}</div>
-            <div class="cd" style="margin-top:6px;">${d}</div>
-          </div>
+  // 3 — STALL COUNT
+  { render: () => {
+    const meta = S.product ? PRODUCT_META[S.product] : { label: 'charger', kw: '—' };
+    return `
+    <div class="eyebrow">Step 3 — Station Configuration</div>
+    <h1>How many <em>charging stalls</em>?</h1>
+    <p class="sub">Each stall has one ${meta.label} delivering up to ${meta.kw} kW. Select the option that best fits your sites.</p>
+    <div class="stall-grid" style="grid-template-columns:repeat(3,1fr);">
+      ${[4,6,8].map(n => `
+        <div class="stall-tile ${S.stalls===n?'sel':''}" onclick="pickStalls(${n},this)">
+          <div class="st-num">${n}</div>
+          <div class="st-kw">${meta.kw} kW / port</div>
         </div>`).join('')}
     </div>
+    <div style="font-size:0.78rem;font-family:var(--mono);color:var(--muted);margin-top:6px;">
+      ${S.stalls ? `<span style="color:var(--gold);">${S.stalls} stalls selected</span> · ${S.stalls} × ${meta.label} · ${meta.kw} kW per port` : 'Select a stall count above'}
+    </div>
+    <div class="ferr" id="e-stalls" style="margin-top:8px;">Please select a stall count.</div>
     <div class="cta-row">
       <button class="btn btn-primary" onclick="showQuote()">Generate quote <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
-  `, valid: () => { if (!S.battery) { toast('Please select a battery option.'); return false; } return true; } },
+  `; }, valid: () => {
+      if (!S.stalls) { document.getElementById('e-stalls').style.display='block'; return false; }
+      document.getElementById('e-stalls').style.display='none';
+      return true;
+  }},
 ];
 
 // ── NAV ──────────────────────────────────────────────────────
@@ -487,6 +514,17 @@ function pick(key, val, el) {
   el.closest('.choices').querySelectorAll('.choice').forEach((c,i) => {
     c.classList.toggle('sel', c===el);
     c.querySelector('.ck').textContent = String.fromCharCode(65+i);
+  });
+}
+
+function pickProduct(val, el) {
+  S.product = val;
+  // Reset stalls when product changes so price stays consistent
+  S.stalls = null;
+  el.closest('.choices').querySelectorAll('.choice').forEach((c,i) => {
+    c.classList.toggle('sel', c===el);
+    const ck = c.querySelector('.ck');
+    if (ck) ck.textContent = String.fromCharCode(65+i);
   });
 }
 
@@ -527,7 +565,7 @@ async function showQuote() {
   const siteResults = siteData.map(sd => {
     const lcfs = isLCFSEligible(sd.address);
     const credit = lcfs ? LCFS_CREDIT_ANNUAL : 0;
-    const fee = calcFee(S.stalls, S.battery, FIXED_IRR, credit);
+    const fee = calcFee(S.product, S.stalls, FIXED_IRR, credit);
     return { ...sd, lcfs, credit, fee };
   });
 
@@ -543,7 +581,7 @@ async function showQuote() {
   const port10yr    = siteResults.reduce((a, s) => a + s.fee.total10, 0);
   const anyLCFS     = siteResults.some(s => s.lcfs);
 
-  const batteryLabels  = { none:'None', '125kw':'125 kW BESS', '250kw':'250 kW BESS' };
+  const productMeta   = PRODUCT_META[S.product] || { label: S.product, kw: '—' };
 
   // Per-site opex rows
   const opexRows = r.opex.map((v,i) => {
@@ -675,9 +713,9 @@ async function showQuote() {
     <div class="q-sec">
       <div class="q-sec-title">Station configuration</div>
       <div class="q-table">
-        <div class="q-row"><span class="q-row-name">Charger model</span><span class="q-price">RE400</span></div>
-        <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls} × RE400 (400 kW each)</span></div>
-        <div class="q-row"><span class="q-row-name">Battery storage</span><span class="q-price">${batteryLabels[S.battery]}</span></div>
+        <div class="q-row"><span class="q-row-name">Charger model</span><span class="q-price">${productMeta.label}</span></div>
+        <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls} × ${productMeta.label} (${productMeta.kw} kW each)</span></div>
+        <div class="q-row"><span class="q-row-name">Battery storage</span><span class="q-price">None (add-on available)</span></div>
         <div class="q-row"><span class="q-row-name">LCFS / clean fuel credit</span><span class="q-price" style="${anyLCFS?'color:var(--gold)':''}">${anyLCFS ? fmt(LCFS_CREDIT_ANNUAL)+'/yr per eligible site' : 'Not applicable'}</span></div>
         <div class="q-row"><span class="q-row-name">Number of sites</span><span class="q-price">${n}</span></div>
         <div class="q-row"><span class="q-row-name">Contract term</span><span class="q-price">10 years</span></div>
@@ -690,7 +728,7 @@ async function showQuote() {
       <div class="inc-list">
         ${[
           ['EV charging strategy',              'Pricing strategy, operational strategy, and operations management'], 
-          ['Hardware procurement & installation', 'RE400 charger equipment, electrical, and permitting coordination.'],
+          ['Hardware procurement & installation', `${productMeta.label} charger equipment, electrical, and permitting coordination.`],
           ['Full-term operations & maintenance',  'Preventative and corrective maintenance included for 10 years.'],
           ['HaloAI on-charger software',          'Driver support, remote diagnostics, and retail experience features.'],
           ['Network & connectivity',              'LTE/WiFi, OCPP compliance, and cloud monitoring included.'],
@@ -703,7 +741,7 @@ async function showQuote() {
     </div>
 
     <div class="q-actions">
-      <button class="btn btn-primary" onclick="exportPDF()">Download PDF <svg viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn btn-primary" onclick="exportPDF()">Download PDF</button>
       <button class="btn btn-ghost" onclick="backToForm()">← Edit inputs</button>
     </div>
 
