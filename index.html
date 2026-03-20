@@ -267,7 +267,7 @@ const PRODUCT_META = {
 
 // ── LCFS ─────────────────────────────────────────────────────
 const LCFS_STATES = ['CA', 'OR', 'WA', 'CALIFORNIA', 'OREGON', 'WASHINGTON'];
-const LCFS_RATE   = 0.007;  // $/kWh delivered
+const LCFS_RATE   = 0.010;  // $/kWh delivered
 
 function isLCFSEligible(address) {
   const upper = address.toUpperCase();
@@ -727,8 +727,6 @@ async function showQuote() {
       <div class="q-table">
         <div class="q-row"><span class="q-row-name">Charger model</span><span class="q-price">${productMeta.label}</span></div>
         <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls} × ${productMeta.label} (${productMeta.kw} kW each)</span></div>
-        <div class="q-row"><span class="q-row-name">Battery storage</span><span class="q-price">None (add-on available)</span></div>
-        ${siteResults[0].lcfs ? `<div class="q-row"><span class="q-row-name">LCFS credit</span><span class="q-price" style="color:var(--gold);">Applied · ${fmt(siteResults[0].lcfsCredit1)}/yr (Yr 1 est.)</span></div>` : ''}
         <div class="q-row"><span class="q-row-name">Number of sites</span><span class="q-price">${n}</span></div>
         <div class="q-row"><span class="q-row-name">Contract term</span><span class="q-price">10 years</span></div>
       </div>
