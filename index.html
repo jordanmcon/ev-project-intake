@@ -171,6 +171,7 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
   .opex-cols .hide-sm{display:none}
 }
 </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -743,13 +744,11 @@ async function showQuote() {
 
 // ── P&L ENGINE ───────────────────────────────────────────────
 
-// kWh delivered per session — based on product power × avg session duration
-// RE400: 400 kW × 0.25h = 100 kWh; Base Station: 200 kW × 0.25h = 50 kWh
 let PL_STATE = { chargingPrice: 0.50, electricityPrice: 0.12 };
 let PL_DATA  = null;   // { spd, caasAnnual, years[] }
 
 function computePL(spd, caasAnnual, chargingPrice, electricityPrice) {
-  const kwhPerSession = PRODUCT_META[S.product]?.kw * 0.25 || 100;
+  const kwhPerSession = 35;  // 35 kWh per session
   const years = [];
   let cumulative = 0;
   let breakevenYear = null;
@@ -802,19 +801,50 @@ function renderPL() {
                : (irr * 100).toFixed(1) + '%';
   const bkStr  = breakevenYear ? 'Year ' + breakevenYear : 'Not in 10 yrs';
 
-  const rows = years.map(y => `
-    <div class="dt-row" style="display:grid;grid-template-columns:44px 1fr 1fr 1fr 1fr 1fr;gap:4px;align-items:center;padding:8px 14px;">
-      <span style="color:var(--muted);font-family:var(--mono);font-size:0.78rem;">Yr ${y.yr}</span>
-      <span>${fmtK(y.revenue)}</span>
-      <span style="color:#ff8888;">${fmtK(y.elecCost)}</span>
-      <span style="color:#ff8888;">${fmtK(y.caasFee)}</span>
-      <span style="color:${y.netProfit >= 0 ? 'var(--gold)' : '#ff7070'};font-weight:500;">${fmtK(y.netProfit)}</span>
-      <span style="color:${y.cumulative >= 0 ? 'var(--gold)' : 'var(--muted)'};font-family:var(--mono);font-size:0.82rem;">${fmtK(y.cumulative)}</span>
-    </div>`).join('');
-
   const totalRevenue  = years.reduce((a, y) => a + y.revenue,  0);
   const totalElec     = years.reduce((a, y) => a + y.elecCost, 0);
   const totalCaaS     = years.reduce((a, y) => a + y.caasFee,  0);
+
+  // Flipped table: rows = line items, columns = years + total
+  const colW = `repeat(${years.length + 2}, 1fr)`;
+  const yrHeaders = years.map(y => `<span style="text-align:right;">Yr ${y.yr}</span>`).join('');
+  const mkRow = (label, vals, totalVal, style='', isNeg=false) => {
+    const cells = vals.map((v,i) => {
+      const col = style || (isNeg ? 'color:#ff8888;' : '');
+      return `<span style="text-align:right;${col}">${fmtK(v)}</span>`;
+    }).join('');
+    const totStyle = style || (isNeg ? 'color:#ff8888;' : '');
+    return `<div style="display:grid;grid-template-columns:${colW};gap:2px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border);">
+      <span style="font-size:0.8rem;color:var(--dim);">${label}</span>
+      ${cells}
+      <span style="text-align:right;font-weight:500;${totStyle}">${fmtK(totalVal)}</span>
+    </div>`;
+  };
+
+  const netColors = years.map(y => `color:${y.netProfit>=0?'var(--gold)':'#ff7070'};font-weight:500;`);
+  const netCells  = years.map((y,i) => `<span style="text-align:right;${netColors[i]}">${fmtK(y.netProfit)}</span>`).join('');
+  const cumColors = years.map(y => `color:${y.cumulative>=0?'var(--gold)':'var(--muted)'};font-family:var(--mono);`);
+  const cumCells  = years.map((y,i) => `<span style="text-align:right;${cumColors[i]}">${fmtK(y.cumulative)}</span>`).join('');
+  const total10NetStyle = total10Net>=0?'color:var(--gold);font-weight:600;':'color:#ff7070;font-weight:600;';
+
+  const flippedTable = `
+    <div class="dt-head" style="display:grid;grid-template-columns:${colW};gap:2px;padding:8px 12px;font-size:0.67rem;letter-spacing:.06em;">
+      <span>Line item</span>${yrHeaders}<span style="text-align:right;">10-Yr total</span>
+    </div>
+    ${mkRow('Charging revenue', years.map(y=>y.revenue), totalRevenue)}
+    ${mkRow('Electricity cost', years.map(y=>y.elecCost), totalElec, 'color:#ff8888;')}
+    ${mkRow('CaaS fee', years.map(y=>y.caasFee), totalCaaS, 'color:#ff8888;')}
+    <div style="display:grid;grid-template-columns:${colW};gap:2px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border);">
+      <span style="font-size:0.8rem;color:var(--dim);font-weight:600;">Net profit</span>
+      ${netCells}
+      <span style="text-align:right;${total10NetStyle}">${fmtK(total10Net)}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:${colW};gap:2px;align-items:center;padding:7px 12px;">
+      <span style="font-size:0.8rem;color:var(--muted);font-style:italic;">Cumulative</span>
+      ${cumCells}
+      <span></span>
+    </div>
+  \`;
 
   document.getElementById('pl-section').innerHTML = `
     <div style="margin-bottom:24px;">
@@ -845,7 +875,7 @@ function renderPL() {
           </div>
         </div>
         <div style="margin-top:14px;font-size:0.72rem;color:var(--muted);font-family:var(--mono);">
-          Session energy: ${(PRODUCT_META[S.product]?.kw * 0.25 || 100).toFixed(0)} kWh/session · SPD grows 10% YoY from ${spd.toFixed(1)} in Year 1
+          35 kWh/session · SPD grows 10% YoY · portfolio total
         </div>
       </div>
 
@@ -868,25 +898,79 @@ function renderPL() {
         </div>
       </div>
 
-      <!-- Table -->
-      <div class="q-sec-title" style="margin-bottom:8px;">Year-by-year P&amp;L</div>
-      <div class="data-table">
-        <div class="dt-head" style="display:grid;grid-template-columns:44px 1fr 1fr 1fr 1fr 1fr;gap:4px;padding:9px 14px;font-size:0.68rem;letter-spacing:.06em;">
-          <span>Year</span><span>Revenue</span><span>Electricity</span><span>CaaS fee</span><span>Net profit</span><span>Cumulative</span>
-        </div>
-        ${rows}
-        <div class="dt-total" style="display:grid;grid-template-columns:44px 1fr 1fr 1fr 1fr 1fr;gap:4px;padding:9px 14px;">
-          <span style="font-size:0.78rem;">Total</span>
-          <span>${fmt(totalRevenue)}</span>
-          <span>${fmt(totalElec)}</span>
-          <span>${fmt(totalCaaS)}</span>
-          <span style="color:${total10Net >= 0 ? 'var(--gold)' : '#ff7070'};">${fmt(total10Net)}</span>
-          <span></span>
+      <!-- Chart -->
+      <div class="q-sec-title" style="margin-bottom:12px;">Net profit by year</div>
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:18px 18px 10px;">
+        <canvas id="pl-chart" style="width:100%;max-height:220px;"></canvas>
+      </div>
+
+      <!-- Flipped Table: rows = line items, columns = years -->
+      <div class="q-sec-title" style="margin-top:20px;margin-bottom:8px;">Year-by-year P&amp;L</div>
+      <div style="overflow-x:auto;">
+        <div class="data-table" style="min-width:740px;">
+          ${flippedTable}
         </div>
       </div>
       <p style="font-size:0.7rem;color:var(--muted);margin-top:8px;font-family:var(--mono);">Revenue and cost projections are illustrative. Actual results will vary based on local conditions.</p>
     </div>
-  `;
+  \`;
+
+  // Draw chart after DOM is ready
+  requestAnimationFrame(() => {
+    const ctx = document.getElementById('pl-chart');
+    if (!ctx) return;
+    if (window._plChart) window._plChart.destroy();
+    const netProfits = years.map(y => Math.round(y.netProfit));
+    const colors = netProfits.map(v => v >= 0 ? 'rgba(248,185,24,0.85)' : 'rgba(255,100,100,0.75)');
+    const borderColors = netProfits.map(v => v >= 0 ? '#f8b918' : '#ff6464');
+    window._plChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: years.map(y => 'Yr ' + y.yr),
+        datasets: [{
+          label: 'Net Profit',
+          data: netProfits,
+          backgroundColor: colors,
+          borderColor: borderColors,
+          borderWidth: 1,
+          borderRadius: 3,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 3.5,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' $' + Math.abs(ctx.parsed.y).toLocaleString() + (ctx.parsed.y < 0 ? ' (loss)' : '')
+            },
+            backgroundColor: '#1e1e22',
+            borderColor: '#444',
+            borderWidth: 1,
+            titleColor: '#ccc',
+            bodyColor: '#f8b918',
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#888', font: { family: 'monospace', size: 11 } }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.06)' },
+            ticks: {
+              color: '#888',
+              font: { family: 'monospace', size: 11 },
+              callback: v => '$' + (Math.abs(v) >= 1000000 ? (v/1000000).toFixed(1)+'M' : Math.abs(v) >= 1000 ? (v/1000).toFixed(0)+'K' : v)
+            },
+            border: { dash: [3,3] }
+          }
+        }
+      }
+    });
+  });
 }
 
 function fmtK(n) {
@@ -902,7 +986,7 @@ function showPL() {
     const found = window._siteResults.filter(s => s.status === 'found');
     if (found.length) spd = found.reduce((a, s) => a + s.spd, 0) / found.length;
   }
-  const caasAnnual = window._siteResults?.[0]?.fee?.annual || 0;
+  const caasAnnual = (window._siteResults || []).reduce((a, s) => a + (s.fee?.annual || 0), 0);
 
   PL_DATA = { spd, caasAnnual };
   document.getElementById('pl-cta').style.display = 'none';
