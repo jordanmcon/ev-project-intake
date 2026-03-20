@@ -731,7 +731,7 @@ const SLIDES = [
       </div>
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-          <div><div class="sum-label">Stalls per site</div><div class="sum-val gold">${S.stalls} DC Fast</div></div>
+          <div><div class="sum-label">Stalls per site</div><div class="sum-val gold">${S.stalls} x RE400</div></div>
           <button onclick="go(3)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
@@ -1412,8 +1412,8 @@ function renderQuote(){
     <div class="q-sec">
       <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
       <div class="q-table">
-        <div class="q-row"><div><div class="q-row-name">DC Fast Charging Stations — ${S.stalls} stalls${p.siteCount>1?' × '+p.siteCount+' sites':''}</div><div class="q-row-desc">Electric Era kiosks with integrated retail media display</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
-<div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}${p.siteCount>1?' × '+p.siteCount+' sites':''}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment','250kw':'250 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>      </div>
+        <div class="q-row"><div><div class="q-row-name">DC Fast Charging Stations — ${S.stalls} stalls${p.siteCount>1?' × '+p.siteCount+' sites':''}</div><div class="q-row-desc">Electric Era RE400: intelligent, immersive, and interactive charging kiosks</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
+<div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}${p.siteCount>1?' × '+p.siteCount+' sites':''}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW battery energy storage system (Section 48E tax credits may significantly reduce your net investment)','250kw':'250 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>      </div>
     </div>
 
     <div class="q-sec">
