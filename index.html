@@ -235,6 +235,49 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
 
 .ci:empty{display:none}
 .chk-icon:empty{display:none}
+/* PORTFOLIO / MULTI-SITE */
+.site-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+.site-row{display:flex;align-items:center;gap:8px;background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:9px 12px;transition:border-color .17s;}
+.site-row.validating{border-color:var(--gold-border);opacity:.7;}
+.site-row.valid{border-color:rgba(74,222,128,.35);}
+.site-row.invalid{border-color:rgba(255,100,100,.35);}
+.site-row-num{font-size:0.75rem;font-family:var(--mono);color:var(--muted);width:18px;flex-shrink:0;text-align:right;}
+.site-row-addr{flex:1;font-size:0.95rem;color:var(--text);line-height:1.3;word-break:break-word;}
+.site-row-status{font-size:11px;font-family:var(--mono);color:var(--muted);flex-shrink:0;white-space:nowrap;}
+.site-row.valid .site-row-status{color:rgba(74,222,128,.8);}
+.site-row.invalid .site-row-status{color:#ff7070;}
+.site-row-actions{display:flex;gap:4px;flex-shrink:0;}
+.site-btn{background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:2px 4px;border-radius:4px;line-height:1;transition:color .15s,background .15s;}
+.site-btn:hover{color:var(--text);background:var(--s3);}
+.site-btn.del:hover{color:#ff7070;}
+.site-edit-input{flex:1;background:transparent;border:none;outline:none;font-size:0.95rem;color:var(--text);font-family:var(--font);}
+.addr-input-wrap{position:relative;}
+.addr-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--s1);border:1px solid var(--gold-border);border-top:none;border-radius:0 0 var(--r) var(--r);z-index:50;max-height:180px;overflow-y:auto;}
+.addr-suggestion{padding:9px 14px;cursor:pointer;font-size:0.9rem;color:var(--text);border-bottom:1px solid var(--border);transition:background .12s;}
+.addr-suggestion:last-child{border-bottom:none;}
+.addr-suggestion:hover,.addr-suggestion.focused{background:var(--s3);}
+.addr-suggestion mark{background:none;color:var(--gold);}
+.import-zone{border:1.5px dashed var(--border);border-radius:var(--r);padding:16px;text-align:center;cursor:pointer;transition:border-color .17s,background .17s;margin-top:4px;}
+.import-zone:hover{border-color:var(--gold-border);background:var(--gold-glow);}
+.import-zone input[type=file]{display:none;}
+.import-label{font-size:0.82rem;color:var(--muted);font-family:var(--mono);letter-spacing:.04em;}
+.port-add-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;}
+.port-add-row input[type=text]{flex:1;}
+
+/* PORTFOLIO QUOTE TABLE */
+.pf-table{width:100%;border-collapse:collapse;font-size:0.9rem;}
+.pf-table th{font-family:var(--mono);font-size:0.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--border);text-align:left;background:var(--s3);}
+.pf-table th:last-child{text-align:right;}
+.pf-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top;}
+.pf-table td:last-child{text-align:right;font-family:var(--mono);color:var(--gold);white-space:nowrap;}
+.pf-table tr:last-child td{border-bottom:none;}
+.pf-table tr.pf-total{background:var(--s3);}
+.pf-table tr.pf-total td{font-weight:600;color:var(--gold);border-top:1px solid var(--gold-border);}
+.pf-table td.muted{color:var(--muted);font-size:0.82rem;}
+.pf-badge{display:inline-block;padding:2px 7px;border-radius:99px;font-size:0.7rem;font-family:var(--mono);}
+.pf-badge.ok{background:rgba(74,222,128,.1);color:rgba(74,222,128,.9);border:1px solid rgba(74,222,128,.25);}
+.pf-badge.warn{background:rgba(255,200,80,.1);color:rgba(255,200,80,.9);border:1px solid rgba(255,200,80,.25);}
+
 /* RESPONSIVE */
 @media(max-width:820px){
   header,footer{padding:14px 18px}
@@ -353,7 +396,8 @@ const S = {
   reasons: [],          // multi: 'revenue-loss'|'competitive'|'brand'|'compliance'
   firstName: '', lastName: '', email: '',
   businessType: '',     // 'business-owner'|'cpo'|'distributor'|'vendor'|'other'
-  siteAddress: '',
+  siteAddress: '',      // kept for single-site compat; mirrors sites[0].address
+  sites: [],            // [{address, geocoded, valid}] — portfolio mode
   stalls: 4,
   budget: '',           // 'allocated'|'financed'
   battery: null,        // 'none'|'125kw'|'250kw'
@@ -377,17 +421,18 @@ const S = {
 
 // ── PRICING ──────────────────────────────────────────────────
 function calcPricing() {
-  const hardware = S.stalls * 55000;
+  const siteCount = Math.max(S.sites.length, 1);
+  const hardware = S.stalls * 55000 * siteCount;
   const n = S.retailPrograms.filter(p => p !== 'none').length;
   const ratePerPort = [14000, 14000, 18000, 28000][n] || 0;
-  const software = ratePerPort * S.stalls;
-  const batteryPrice = S.battery === '125kw' ? 123000 : S.battery === '250kw' ? 186000 : 0;
-  const batteryOM = (S.battery === '125kw' || S.battery === '250kw') ? 9000 : 0;
-  const design = S.addDesign ? 31500 : 0;
-  const epc = S.addEPC ? 40000 : 0;
-  const construction = S.addConstruction ? 164500 : 0;
+  const software = ratePerPort * S.stalls * siteCount;
+  const batteryPrice = (S.battery === '125kw' ? 123000 : S.battery === '250kw' ? 186000 : 0) * siteCount;
+  const batteryOM = ((S.battery === '125kw' || S.battery === '250kw') ? 9000 : 0) * siteCount;
+  const design = S.addDesign ? 31500 * siteCount : 0;
+  const epc = S.addEPC ? 40000 * siteCount : 0;
+  const construction = S.addConstruction ? 164500 * siteCount : 0;
   const subtotal = hardware + software + batteryPrice + batteryOM + design + epc + construction;
-  return { hardware, software, batteryPrice, batteryOM, design, epc, construction, subtotal, ratePerPort, n };
+  return { hardware, software, batteryPrice, batteryOM, design, epc, construction, subtotal, ratePerPort, n, siteCount };
 }
 
 function fmt(n) { return '$' + n.toLocaleString('en-US'); }
@@ -473,13 +518,42 @@ const SLIDES = [
     });if(ok)trackStep(1);return ok;
   }},
 
-  // 3 — SITE + STALLS + BUDGET
+  // 3 — SITE + STALLS + BUDGET (multi-site portfolio)
   { step:1, render:()=>`
     <div class="eyebrow">Project Intake</div>
-    <h1>Tell us about your <em>project site</em>.</h1>
-    <div class="field"><label>Project site address (include city, state)</label><input type="text" style="border-style:solid;border-color:#F8B918;" id="siteAddress" placeholder="123 Main St, Seattle, WA" value="${S.siteAddress}" oninput="S.siteAddress=this.value"><div class="ferr" id="e-siteAddress">Required</div></div>
+    <h1>Tell us about your <em>project site(s)</em>.</h1>
+    <p class="sub" style="margin-bottom:16px;">Add one or more site addresses. The same station configuration will apply to all sites.</p>
+
+    <div class="field" style="margin-bottom:8px;">
+      <label>Add a site address</label>
+      <div class="port-add-row">
+        <div class="addr-input-wrap" style="flex:1;">
+          <input type="text" id="newSiteInput" placeholder="123 Main St, Seattle, WA" autocomplete="off"
+            oninput="pfHandleInput(this.value)"
+            onkeydown="pfInputKeydown(event)">
+          <div class="addr-suggestions" id="addrSuggestions" style="display:none;"></div>
+        </div>
+        <button class="btn btn-primary" onclick="pfAddCurrent()" style="flex-shrink:0;padding:12px 16px;">Add</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+        <span style="font-size:0.75rem;font-family:var(--mono);color:var(--muted);">or</span>
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+      <div class="import-zone" onclick="document.getElementById('csvUpload').click()" style="margin-top:6px;">
+        <input type="file" id="csvUpload" accept=".csv,.txt" onchange="pfImportCSV(this)">
+        <div class="import-label">⬆ Import CSV — one address per row</div>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:0;">
+      <label>Sites <span id="siteCount" style="color:var(--gold);">(${S.sites.length})</span></label>
+      <div class="site-list" id="siteList">${renderSiteList()}</div>
+      <div class="ferr" id="e-sites" style="display:none;">Please add at least one site address</div>
+    </div>
+
     <div class="field" style="margin-bottom:22px;">
-      <label>Estimated # of stalls</label>
+      <label>Estimated # of stalls <span style="color:var(--muted);font-weight:300;">(per site)</span></label>
       <div class="stall-display" id="stall-num">${S.stalls}</div>
       <input type="range" id="stall-range" min="1" max="32" value="${S.stalls}" oninput="S.stalls=+this.value;document.getElementById('stall-num').textContent=this.value;trackRange(this)">
       <div class="range-labels"><span>1</span><span>8</span><span>16</span><span>24</span><span>32</span></div>
@@ -502,14 +576,30 @@ const SLIDES = [
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
-  `, onEnter:()=>setTimeout(()=>{const r=document.getElementById('stall-range');if(r)trackRange(r);},60),
+  `, onEnter:()=>{
+    setTimeout(()=>{
+      const r=document.getElementById('stall-range');if(r)trackRange(r);
+      renderSiteListDOM();
+    },60);
+  },
     valid:()=>{
       let ok=true;
-      const sa=document.getElementById('siteAddress'),esa=document.getElementById('e-siteAddress');
-      if(sa&&sa.value.trim()===''){sa.classList.add('inv');if(esa)esa.style.display='block';ok=false;}
-      else if(sa){sa.classList.remove('inv');if(esa)esa.style.display='none';}
-      if(!S.budget){document.getElementById('e-budget').style.display='block';ok=false;}
-      else document.getElementById('e-budget').style.display='none';
+      if(S.sites.length===0){
+        const e=document.getElementById('e-sites');
+        if(e){e.style.display='block';}
+        toast('Please add at least one site address.');
+        ok=false;
+      }
+      if(!S.budget){
+        const e=document.getElementById('e-budget');
+        if(e)e.style.display='block';
+        ok=false;
+      } else {
+        const e=document.getElementById('e-budget');
+        if(e)e.style.display='none';
+      }
+      // Sync siteAddress for backwards compat
+      if(S.sites.length>0) S.siteAddress=S.sites[0].address;
       return ok;
   }},
 
@@ -635,7 +725,13 @@ const SLIDES = [
     <div class="sum-grid">
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-          <div><div class="sum-label">Stalls</div><div class="sum-val gold">${S.stalls} DC Fast</div></div>
+          <div><div class="sum-label">Sites</div><div class="sum-val gold">${S.sites.length} site${S.sites.length!==1?'s':''}</div>${S.sites.length>0?`<div style="font-size:0.78rem;color:var(--muted);margin-top:2px;font-family:var(--mono);">${S.sites[0].address}${S.sites.length>1?' + '+(S.sites.length-1)+' more':''}</div>`:''}</div>
+          <button onclick="go(3)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+        </div>
+      </div>
+      <div class="sum-card" style="position:relative;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div><div class="sum-label">Stalls per site</div><div class="sum-val gold">${S.stalls} DC Fast</div></div>
           <button onclick="go(3)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
@@ -684,6 +780,210 @@ const SLIDES = [
     </div>`;
   }, valid:()=>{ if(!S.startDate){toast('Please select a completion date.');return false;} return true; } },
 ];
+
+// ── PORTFOLIO / MULTI-SITE HELPERS ───────────────────────────
+let pfSuggestions = [];
+let pfFocusedIdx = -1;
+let pfDebounceTimer = null;
+let pfEditingIdx = -1; // index of site currently being edited inline
+
+function renderSiteList() {
+  if (!S.sites.length) return '<div style="font-size:0.85rem;color:var(--muted);padding:8px 2px;font-family:var(--mono);">No sites added yet.</div>';
+  return S.sites.map((s,i) => `
+    <div class="site-row ${s.geocoded?'valid':s.geocoded===false?'invalid':''}" id="siterow-${i}">
+      <span class="site-row-num">${i+1}</span>
+      <div class="site-row-addr" id="siteaddr-${i}">${escHtml(s.address)}</div>
+      <span class="site-row-status">${s.geocoded===true?'✓ verified':s.geocoded===false?'⚠ unverified':''}</span>
+      <div class="site-row-actions">
+        <button class="site-btn" title="Edit" onclick="pfStartEdit(${i})">✎</button>
+        <button class="site-btn del" title="Remove" onclick="pfRemove(${i})">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSiteListDOM() {
+  const el = document.getElementById('siteList');
+  if (el) el.innerHTML = renderSiteList();
+  const cnt = document.getElementById('siteCount');
+  if (cnt) cnt.textContent = '('+S.sites.length+')';
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function pfStartEdit(idx) {
+  pfEditingIdx = idx;
+  const addrEl = document.getElementById('siteaddr-'+idx);
+  const row = document.getElementById('siterow-'+idx);
+  if (!addrEl || !row) return;
+  const current = S.sites[idx].address;
+  addrEl.innerHTML = `<input class="site-edit-input" id="site-edit-input-${idx}" value="${escHtml(current)}"
+    onkeydown="pfEditKeydown(event,${idx})" onblur="pfCommitEdit(${idx})">`;
+  const inp = document.getElementById('site-edit-input-'+idx);
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+function pfEditKeydown(e, idx) {
+  if (e.key === 'Enter') { e.preventDefault(); pfCommitEdit(idx); }
+  if (e.key === 'Escape') { pfEditingIdx=-1; renderSiteListDOM(); }
+}
+
+function pfCommitEdit(idx) {
+  const inp = document.getElementById('site-edit-input-'+idx);
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (val) {
+    S.sites[idx] = { address: val, geocoded: null };
+    pfGeocodeIdx(idx);
+  }
+  pfEditingIdx = -1;
+  renderSiteListDOM();
+}
+
+function pfRemove(idx) {
+  S.sites.splice(idx, 1);
+  const e = document.getElementById('e-sites');
+  if (e && S.sites.length > 0) e.style.display = 'none';
+  renderSiteListDOM();
+}
+
+async function pfGeocodeIdx(idx) {
+  const site = S.sites[idx];
+  if (!site) return;
+  const row = document.getElementById('siterow-'+idx);
+  if (row) row.className = 'site-row validating';
+  const statusEl = row ? row.querySelector('.site-row-status') : null;
+  if (statusEl) statusEl.textContent = '…';
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(site.address);
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    if (data && data.length > 0) {
+      S.sites[idx].geocoded = true;
+      S.sites[idx].displayName = data[0].display_name;
+    } else {
+      S.sites[idx].geocoded = false;
+    }
+  } catch(e) {
+    S.sites[idx].geocoded = false;
+  }
+  renderSiteListDOM();
+}
+
+async function pfAddAddress(addr) {
+  if (!addr.trim()) return;
+  // Deduplicate
+  if (S.sites.some(s => s.address.toLowerCase() === addr.trim().toLowerCase())) {
+    toast('That address is already in your list.');
+    return;
+  }
+  const idx = S.sites.length;
+  S.sites.push({ address: addr.trim(), geocoded: null });
+  renderSiteListDOM();
+  const e = document.getElementById('e-sites');
+  if (e) e.style.display = 'none';
+  pfGeocodeIdx(idx); // async, updates DOM when done
+}
+
+function pfAddCurrent() {
+  const inp = document.getElementById('newSiteInput');
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) { toast('Please enter an address.'); return; }
+  pfAddAddress(val);
+  inp.value = '';
+  pfHideSuggestions();
+}
+
+function pfInputKeydown(e) {
+  const sugg = document.getElementById('addrSuggestions');
+  const items = sugg ? sugg.querySelectorAll('.addr-suggestion') : [];
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    pfFocusedIdx = Math.min(pfFocusedIdx+1, items.length-1);
+    items.forEach((el,i)=>el.classList.toggle('focused',i===pfFocusedIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    pfFocusedIdx = Math.max(pfFocusedIdx-1, 0);
+    items.forEach((el,i)=>el.classList.toggle('focused',i===pfFocusedIdx));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (pfFocusedIdx>=0 && items[pfFocusedIdx]) {
+      pfSelectSuggestion(items[pfFocusedIdx].dataset.addr);
+    } else {
+      pfAddCurrent();
+    }
+  } else if (e.key === 'Escape') {
+    pfHideSuggestions();
+  }
+}
+
+function pfHandleInput(val) {
+  clearTimeout(pfDebounceTimer);
+  if (val.length < 4) { pfHideSuggestions(); return; }
+  pfDebounceTimer = setTimeout(()=>pfFetchSuggestions(val), 350);
+}
+
+async function pfFetchSuggestions(q) {
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&q='+encodeURIComponent(q);
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    pfSuggestions = data.map(d=>d.display_name);
+    pfShowSuggestions(q);
+  } catch(e) { pfHideSuggestions(); }
+}
+
+function pfShowSuggestions(q) {
+  const sugg = document.getElementById('addrSuggestions');
+  if (!sugg || !pfSuggestions.length) { pfHideSuggestions(); return; }
+  pfFocusedIdx = -1;
+  sugg.innerHTML = pfSuggestions.map((addr,i)=>{
+    const safe = escHtml(addr);
+    return `<div class="addr-suggestion" data-addr="${safe}" onmousedown="pfSelectSuggestion('${safe.replace(/'/g,"\\'")}')"><mark>${escHtml(q)}</mark>${escHtml(addr.slice(q.length))}</div>`;
+  }).join('');
+  sugg.style.display = 'block';
+}
+
+function pfHideSuggestions() {
+  const sugg = document.getElementById('addrSuggestions');
+  if (sugg) sugg.style.display = 'none';
+  pfSuggestions = [];
+  pfFocusedIdx = -1;
+}
+
+function pfSelectSuggestion(addr) {
+  const inp = document.getElementById('newSiteInput');
+  if (inp) inp.value = addr;
+  pfHideSuggestions();
+  pfAddAddress(addr);
+  if (inp) inp.value = '';
+}
+
+function pfImportCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const lines = e.target.result.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    // Strip header if it looks like one (contains 'address' or 'site')
+    const start = /^(address|site|location)/i.test(lines[0]) ? 1 : 0;
+    let added = 0;
+    lines.slice(start).forEach(line => {
+      // Handle simple CSV: take first column if comma-separated non-address-like
+      // Or treat the whole line as an address
+      const addr = line.split(',').length > 4
+        ? line  // looks like a full address with commas, keep it
+        : line.split('\t')[0].trim(); // tab-separated: first col
+      if (addr) { pfAddAddress(addr); added++; }
+    });
+    toast(`Imported ${added} address${added!==1?'es':''} from CSV.`);
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
 
 // ── NAV ──────────────────────────────────────────────────────
 let cur = 0;
@@ -891,13 +1191,17 @@ async function submitToHubSpot() {
 
   const activeRetail = S.retailPrograms.filter(p => p !== 'none');
   const pricing = calcPricing();
+  const siteAddressList = S.sites.map(s=>s.address).join(' | ');
+  const dealName = S.sites.length > 1
+    ? `${S.firstName} ${S.lastName} — ${S.sites.length} sites (${S.sites[0].address}…)`
+    : `${S.firstName} ${S.lastName} — ${S.siteAddress}`;
 
   // ── Contact properties (existing) ────────────────────────────────────────
   const properties = {
     firstname:            S.firstName,
     lastname:             S.lastName,
     business_type:        bizMap[S.businessType] || S.businessType,
-    location_of_interest: S.siteAddress,
+    location_of_interest: siteAddressList,
     number_of_stalls:     String(S.stalls),
     cpq_test_why_install_ev_charging: S.reasons.map(r => reasonMap[r] || r).join(';'),
     cpq_test_budget:                  budgetMap[S.budget] || S.budget,
@@ -909,7 +1213,7 @@ async function submitToHubSpot() {
   // ── Deal properties ───────────────────────────────────────────────────────
   // Pipeline: "CPQ Test" (875089784), Stage: "Identified" (1128525596)
   const dealProperties = {
-    dealname:                    `${S.firstName} ${S.lastName} — ${S.siteAddress}`,
+    dealname:                    dealName,
     pipeline:                    '772342789',  // Site Opportunity
     dealstage:                   '1128525596',  // Identified
     amount:                      String(pricing.subtotal),
@@ -923,7 +1227,7 @@ async function submitToHubSpot() {
     cpq_quote:                       S.quoteId,
     cpq_ideal_completion_date:       calcCompletionDate(),
     cpq_calculated_start_date:       calcProjectStartDate(),
-    cpq_site_address:             S.siteAddress,
+    cpq_site_address:             siteAddressList,
   };
 
   // ── Grant fields ──────────────────────────────────────────────────────────
@@ -1056,7 +1360,6 @@ function renderQuote(){
         <div class="q-info-card"><div class="qi-label">Contact</div><div class="qi-val">${S.firstName} ${S.lastName}</div></div>
         <div class="q-info-card"><div class="qi-label">Email</div><div class="qi-val">${S.email}</div></div>
         <div class="q-info-card"><div class="qi-label">Business Type</div><div class="qi-val">${bizLabel}</div></div>
-        <div class="q-info-card"><div class="qi-label">Site Address</div><div class="qi-val">${S.siteAddress||'—'}</div></div>
         <div class="q-info-card"><div class="qi-label">Primary Reasons</div><div class="qi-val">${S.reasons.map(r=>rLabels[r]).join(', ')||'—'}</div></div>
         <div class="q-info-card"><div class="qi-label">Budget Approach</div><div class="qi-val">${budgetLabel}</div></div>
         <div class="q-info-card"><div class="qi-label">Target Completion</div><div class="qi-val">${startLabel}</div></div>
@@ -1064,11 +1367,45 @@ function renderQuote(){
       </div>
     </div>
 
+    ${S.sites.length > 1 ? `
+    <div class="q-sec">
+      <div class="q-sec-title-row"><div class="q-sec-title">Portfolio — ${S.sites.length} Sites</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
+      <div class="q-table" style="overflow:auto;">
+        <table class="pf-table">
+          <thead><tr>
+            <th>#</th><th>Site Address</th><th>Stalls</th><th>Battery</th><th>Subtotal</th>
+          </tr></thead>
+          <tbody>
+            ${S.sites.map((s,i)=>{
+              const siteSub = S.stalls*55000 + (S.retailPrograms.filter(r=>r!=='none').length>0?p.ratePerPort*S.stalls:0) + (S.battery==='125kw'?123000:S.battery==='250kw'?186000:0) + (S.battery&&S.battery!=='none'&&S.battery!=='unsure'?9000:0) + (S.addDesign?31500:0) + (S.addEPC?40000:0) + (S.addConstruction?164500:0);
+              return `<tr>
+                <td style="color:var(--muted);font-family:var(--mono);">${i+1}</td>
+                <td>${escHtml(s.address)}<br><span class="muted">${s.geocoded?'<span class="pf-badge ok">✓ verified</span>':'<span class="pf-badge warn">⚠ unverified</span>'}</span></td>
+                <td style="font-family:var(--mono);">${S.stalls}</td>
+                <td style="font-family:var(--mono);">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'TBD'}[S.battery]||'—'}</td>
+                <td>${fmt(siteSub)}</td>
+              </tr>`;
+            }).join('')}
+            <tr class="pf-total">
+              <td colspan="4" style="font-family:var(--mono);letter-spacing:.05em;">PORTFOLIO TOTAL</td>
+              <td>${fmt(p.subtotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>` : `
+    <div class="q-sec">
+      <div class="q-sec-title-row"><div class="q-sec-title">Site</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
+      <div class="q-info-grid">
+        <div class="q-info-card" style="grid-column:1/-1;"><div class="qi-label">Site Address</div><div class="qi-val">${S.sites[0]?.address||S.siteAddress||'—'}</div></div>
+      </div>
+    </div>`}
+
     <div class="q-sec">
       <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
       <div class="q-table">
-        <div class="q-row"><div><div class="q-row-name">DC Fast Charging Stations — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era kiosks with integrated retail media display</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
-<div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment','250kw':'250 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>      </div>
+        <div class="q-row"><div><div class="q-row-name">DC Fast Charging Stations — ${S.stalls} stalls${p.siteCount>1?' × '+p.siteCount+' sites':''}</div><div class="q-row-desc">Electric Era kiosks with integrated retail media display</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
+<div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}${p.siteCount>1?' × '+p.siteCount+' sites':''}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment','250kw':'250 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>      </div>
     </div>
 
     <div class="q-sec">
@@ -1252,7 +1589,7 @@ function restart(){
   // Re-detect grant from URL param on restart so campaign links stay active
   const urlGrant = new URLSearchParams(window.location.search).get('grant');
   const grantOnRestart = (urlGrant && GRANTS[urlGrant]) ? urlGrant : '';
-  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',stalls:4,budget:'',battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
+  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',sites:[],stalls:4,budget:'',battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
   // Clear hash without triggering the hashchange listener
   window.removeEventListener('hashchange', onHashChange);
   window.location.hash='';
