@@ -875,7 +875,7 @@ function renderPL() {
           </div>
         </div>
         <div style="margin-top:14px;font-size:0.72rem;color:var(--muted);font-family:var(--mono);">
-          35 kWh/session · SPD grows 10% YoY · portfolio total
+          35 kWh/session · SPD grows 10% YoY · portfolio SPD total: ${spd.toFixed(1)}
         </div>
       </div>
 
@@ -984,7 +984,7 @@ function showPL() {
   let spd = 5;
   if (window._siteResults && window._siteResults.length) {
     const found = window._siteResults.filter(s => s.status === 'found');
-    if (found.length) spd = found.reduce((a, s) => a + s.spd, 0) / found.length;
+    if (found.length) spd = found.reduce((a, s) => a + s.spd, 0);
   }
   const caasAnnual = (window._siteResults || []).reduce((a, s) => a + (s.fee?.annual || 0), 0);
 
