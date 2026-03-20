@@ -857,7 +857,7 @@ async function pfGeocodeIdx(idx) {
   const statusEl = row ? row.querySelector('.site-row-status') : null;
   if (statusEl) statusEl.textContent = '…';
   try {
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(site.address);
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(site.address);
     const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
     const data = await res.json();
     if (data && data.length > 0) {
@@ -928,7 +928,7 @@ function pfHandleInput(val) {
 
 async function pfFetchSuggestions(q) {
   try {
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&q='+encodeURIComponent(q);
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&countrycodes=us&q='+encodeURIComponent(q);
     const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
     const data = await res.json();
     pfSuggestions = data.map(d=>d.display_name);
@@ -1352,7 +1352,7 @@ function renderQuote(){
         <div class="q-date">${S.quoteDate}</div>
         <div class="q-badge">ESTIMATE</div>
         <div style="margin-top:14px;">
-          <button class="btn btn-ghost" onclick="savePdf()">Save as PDF</button>
+          <button class="btn btn-ghost" onclick="savePdf()">Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
       </div>
     </div>
@@ -1483,7 +1483,7 @@ function renderQuote(){
       <div><div class="q-note-title">Next Steps</div><div class="q-note-body">
       <ul style="padding-left:18px;">
       <li>Check your email inbox for a record of your quote</li>
-      <li> Review the <a href="https://electricera.tech/terms-conditions" target="_blank" style="text-decoration: underline;color:var(--gold);">Terms and Conditions</a></li>
+      <li> Review the <a href="https://electricera.tech/terms-conditions" target="_blank" style="text-decoration: underline;color:var(--gold);">>Terms and Conditions</a></li>
       <li>An Electric Era representative will reach out shortly to kick off a site assessment</li>
       <li> An Electric Era engineer will be assigned to create a site layout</li>
       <li> Explore:<a href="https://electricera.tech/app/p-l-generator" target="_blank" style="text-decoration: underline;color:var(--gold);"> Forecast charging sessions, growth, and ROI for your location </a> </li>
