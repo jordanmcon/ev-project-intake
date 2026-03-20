@@ -1352,7 +1352,7 @@ function renderQuote(){
         <div class="q-date">${S.quoteDate}</div>
         <div class="q-badge">ESTIMATE</div>
         <div style="margin-top:14px;">
-          <button class="btn btn-ghost" onclick="savePdf()">Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button class="btn btn-ghost" onclick="savePdf()">Save as PDF</button>
         </div>
       </div>
     </div>
@@ -1377,21 +1377,23 @@ function renderQuote(){
       <div class="q-table" style="overflow:auto;">
         <table class="pf-table">
           <thead><tr>
-            <th>#</th><th>Site Address</th><th>Stalls</th><th>Battery</th><th>Subtotal</th>
+            <th>#</th><th>Site Address</th><th>Stalls</th><th>Battery</th><th>Add-ons</th><th>Subtotal</th>
           </tr></thead>
           <tbody>
             ${S.sites.map((s,i)=>{
               const siteSub = S.stalls*55000 + (S.retailPrograms.filter(r=>r!=='none').length>0?p.ratePerPort*S.stalls:0) + (S.battery==='125kw'?123000:S.battery==='250kw'?186000:0) + (S.battery&&S.battery!=='none'&&S.battery!=='unsure'?9000:0) + (S.addDesign?31500:0) + (S.addEPC?40000:0) + (S.addConstruction?164500:0);
+              const addons = [S.addDesign&&'Design',S.addEPC&&'EPC Mgmt',S.addConstruction&&'Construction'].filter(Boolean);
               return `<tr>
                 <td style="color:var(--muted);font-family:var(--mono);">${i+1}</td>
                 <td>${escHtml(s.address)}<br><span class="muted">${s.geocoded?'<span class="pf-badge ok">✓ verified</span>':'<span class="pf-badge warn">⚠ unverified</span>'}</span></td>
                 <td style="font-family:var(--mono);">${S.stalls}</td>
                 <td style="font-family:var(--mono);">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'TBD'}[S.battery]||'—'}</td>
+                <td style="font-size:0.82rem;color:var(--muted);">${addons.length?addons.join('<br>'):'—'}</td>
                 <td>${fmt(siteSub)}</td>
               </tr>`;
             }).join('')}
             <tr class="pf-total">
-              <td colspan="4" style="font-family:var(--mono);letter-spacing:.05em;">PORTFOLIO TOTAL — CAPEX + YEAR 1 OPEX</td>
+              <td colspan="5" style="font-family:var(--mono);letter-spacing:.05em;">PORTFOLIO TOTAL — CAPEX + YEAR 1 OPEX</td>
               <td>${fmt(p.subtotal)}</td>
             </tr>
           </tbody>
@@ -1483,7 +1485,7 @@ function renderQuote(){
       <div><div class="q-note-title">Next Steps</div><div class="q-note-body">
       <ul style="padding-left:18px;">
       <li>Check your email inbox for a record of your quote</li>
-      <li> Review the <a href="https://electricera.tech/terms-conditions" target="_blank" style="text-decoration: underline;color:var(--gold);">>Terms and Conditions</a></li>
+      <li> Review the <a href="https://electricera.tech/terms-conditions" target="_blank" style="text-decoration: underline;color:var(--gold);">Terms and Conditions</a></li>
       <li>An Electric Era representative will reach out shortly to kick off a site assessment</li>
       <li> An Electric Era engineer will be assigned to create a site layout</li>
       <li> Explore:<a href="https://electricera.tech/app/p-l-generator" target="_blank" style="text-decoration: underline;color:var(--gold);"> Forecast charging sessions, growth, and ROI for your location </a> </li>
@@ -1688,7 +1690,7 @@ function savePdf() {
     el.style.cssText = origStyle;
     const ps = document.getElementById('pdf-print-overrides');
     if (ps) ps.remove();
-    btn.innerHTML = 'Save as PDF <svg viewBox="0 0 14 14" fill="none"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    btn.innerHTML = 'Save as PDF';
     btn.disabled = false;
   };
 
