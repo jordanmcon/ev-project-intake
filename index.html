@@ -798,7 +798,7 @@ async function renderCaaSQuote(qWrap) {
     <div class="q-sec">
       <div class="q-sec-title-row"><div class="q-sec-title">Station Configuration</div><button class="q-edit-btn" onclick="goBackFromQuote(4)">Edit ↗</button></div>
       <div class="q-table">
-        <div class="q-row"><div><div class="q-row-name">Charger model</div></div><div class="q-price">${productMeta.label} (${productMeta.kw} kW/port)</div></div>
+        <div class="q-row"><div><div class="q-row-name">Product</div></div><div class="q-price">${productMeta.label} (${productMeta.kw} kW/port)</div></div>
         <div class="q-row"><div><div class="q-row-name">Charging stalls</div></div><div class="q-price">${S.stalls}${anyCapped?'+':''} stalls</div></div>
         <div class="q-row"><div><div class="q-row-name">Sites</div></div><div class="q-price">${n}</div></div>
         <div class="q-row"><div><div class="q-row-name">Contract term</div></div><div class="q-price">10 years · fixed fee</div></div>
@@ -1139,7 +1139,7 @@ const SLIDES = [
       <div class="sum-card"><div class="sum-label">Stalls</div><div class="sum-val gold">${S.stalls} per site</div></div>
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-          <div><div class="sum-label">Charger Model</div><div class="sum-val">${productLabel}</div></div>
+          <div><div class="sum-label">Productl</div><div class="sum-val">${productLabel}</div></div>
           <button onclick="go(4)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
