@@ -102,9 +102,12 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-6px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 
 /* SITE TAGS */
-.site-tag{display:inline-flex;align-items:center;gap:6px;background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:4px 10px 4px 12px;font-size:0.85rem;color:var(--text);margin:3px 3px 3px 0}
+.site-tag{display:inline-flex;align-items:center;gap:6px;background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:4px 10px 4px 8px;font-size:0.85rem;color:var(--text);margin:3px 3px 3px 0}
 .site-tag button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0;line-height:1;transition:color .15s}
 .site-tag button:hover{color:var(--gold)}
+.site-tag-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 5px rgba(74,222,128,0.5)}
+.add-spinner{display:inline-block;width:11px;height:11px;border:1.5px solid rgba(255,255,255,0.2);border-top-color:var(--text);border-radius:50%;animation:hex-spin .6s linear infinite;vertical-align:middle}
+#add-btn:disabled{opacity:0.6;cursor:not-allowed}
 .site-tags-wrap{display:flex;flex-wrap:wrap;margin-top:10px;min-height:20px}
 .upload-zone{border:1px dashed var(--border);border-radius:var(--r);padding:14px 18px;cursor:pointer;transition:all .17s;text-align:center;font-size:0.88rem;color:var(--muted)}
 .upload-zone:hover{border-color:var(--gold-border);color:var(--text)}
@@ -400,20 +403,83 @@ function fmt(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
 // ── SITE MANAGEMENT ──────────────────────────────────────────
 function parseSiteText(txt) { return txt.split('\n').map(s=>s.trim()).filter(Boolean); }
 
+// Geocode a single address via Nominatim — returns resolved display_name or null
+async function verifyAddress(raw) {
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=' + encodeURIComponent(raw);
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    if (!data || !data.length) return null;
+    // Build a clean "Street, City, State ZIP" label from address parts
+    const a = data[0].address || {};
+    const parts = [
+      a.house_number && a.road ? `${a.house_number} ${a.road}` : (a.road || null),
+      a.city || a.town || a.village || a.county || null,
+      a.state || null,
+      a.postcode || null,
+    ].filter(Boolean);
+    return parts.length >= 2 ? parts.join(', ') : data[0].display_name;
+  } catch(e) {
+    return null;
+  }
+}
+
 function renderSiteTags() {
   const wrap = document.getElementById('site-tags'); if (!wrap) return;
   wrap.innerHTML = S.sites.map((s,i) => `
-    <span class="site-tag">${s}
+    <span class="site-tag">
+      <span class="site-tag-dot"></span>${s}
       <button onclick="removeSite(${i})" title="Remove">✕</button>
     </span>`).join('');
   const counter = document.getElementById('site-count');
   if (counter) counter.textContent = S.sites.length ? `${S.sites.length} site${S.sites.length>1?'s':''}` : '';
 }
 
-function addSitesFromText() {
+function setAddBtn(state) {
+  // state: 'idle' | 'loading' | 'error'
+  const btn = document.getElementById('add-btn');
+  const err = document.getElementById('e-verify');
+  if (!btn) return;
+  if (state === 'loading') {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="add-spinner"></span> Verifying…';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = '+ Add';
+  }
+  if (err) err.style.display = state === 'error' ? 'block' : 'none';
+}
+
+async function addSitesFromText() {
   const ta = document.getElementById('siteInput'); if (!ta) return;
-  parseSiteText(ta.value).forEach(l => { if (!S.sites.includes(l)) S.sites.push(l); });
-  ta.value = '';
+  const lines = parseSiteText(ta.value);
+  if (!lines.length) return;
+
+  setAddBtn('loading');
+
+  const failed = [];
+  for (const line of lines) {
+    if (S.sites.includes(line)) continue; // skip exact dupes
+    const resolved = await verifyAddress(line);
+    if (resolved) {
+      if (!S.sites.includes(resolved)) S.sites.push(resolved);
+    } else {
+      failed.push(line);
+    }
+    await new Promise(r => setTimeout(r, 200)); // Nominatim rate limit
+  }
+
+  if (failed.length) {
+    const err = document.getElementById('e-verify');
+    if (err) {
+      err.textContent = `Could not verify: ${failed.join('; ')} — please check and try again.`;
+      err.style.display = 'block';
+    }
+    setAddBtn('error');
+  } else {
+    setAddBtn('idle');
+    ta.value = '';
+  }
   renderSiteTags();
 }
 
@@ -421,10 +487,33 @@ function removeSite(i) { S.sites.splice(i,1); renderSiteTags(); }
 
 function handleCSV(file) {
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const lines = e.target.result.split('\n').map(l => l.replace(/^["']|["']$/g,'').trim()).filter(Boolean);
     const start = /address|site|location/i.test(lines[0]) ? 1 : 0;
-    lines.slice(start).forEach(l => { if (!S.sites.includes(l)) S.sites.push(l); });
+    const toAdd = lines.slice(start).filter(l => !S.sites.includes(l));
+    if (!toAdd.length) return;
+
+    setAddBtn('loading');
+    const failed = [];
+    for (const line of toAdd) {
+      const resolved = await verifyAddress(line);
+      if (resolved) {
+        if (!S.sites.includes(resolved)) S.sites.push(resolved);
+      } else {
+        failed.push(line);
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+    if (failed.length) {
+      const err = document.getElementById('e-verify');
+      if (err) {
+        err.textContent = `Could not verify ${failed.length} address${failed.length>1?'es':''} from CSV — they were not added.`;
+        err.style.display = 'block';
+      }
+      setAddBtn('error');
+    } else {
+      setAddBtn('idle');
+    }
     renderSiteTags();
   };
   reader.readAsText(file);
@@ -470,10 +559,11 @@ const SLIDES = [
       <textarea id="siteInput" placeholder="123 Main St, Seattle, WA"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSitesFromText();}"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
-        <button class="btn btn-ghost btn-sm" onclick="addSitesFromText()">+ Add</button>
+        <button id="add-btn" class="btn btn-ghost btn-sm" onclick="addSitesFromText()">+ Add</button>
         <span style="font-size:0.78rem;color:var(--muted);font-family:var(--mono);">or press Enter</span>
       </div>
       <div class="ferr" id="e-sites">Please add at least one site address.</div>
+      <div class="ferr" id="e-verify" style="display:none;"></div>
     </div>
     <div class="upload-zone" onclick="document.getElementById('csv-input').click()">
       <input type="file" id="csv-input" accept=".csv,.txt" onchange="if(this.files[0])handleCSV(this.files[0])">
@@ -770,17 +860,14 @@ async function showQuote() {
             <div class="metric-card">
               <div class="metric-label">Est. sessions / day (Yr 1)</div>
               <div class="metric-val" style="color:var(--gold);">${sd.spd.toFixed(1)}</div>
-              <div class="metric-sub">Based on nearby station data</div>
             </div>
             <div class="metric-card">
               <div class="metric-label">Est. sessions / month (Yr 1)</div>
               <div class="metric-val">${Math.round(sd.spd * 30.4)}</div>
-              <div class="metric-sub">30.4-day average</div>
             </div>
             <div class="metric-card">
               <div class="metric-label">Est. sessions / year (Yr 1)</div>
               <div class="metric-val">${Math.round(sd.spd * 365)}</div>
-              <div class="metric-sub">Annualized</div>
             </div>
           </div>`;
         }
