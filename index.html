@@ -1859,7 +1859,7 @@ function onBatteryToggle() {
 }
 
 function isLCFSState() {
-    const s = (PL.lastState||lastState||'').toLowerCase().trim();
+    const s = (PL.lastState || '').toLowerCase().trim();
     return s === 'washington' || s === 'oregon' || s === 'california' ||
            s === 'wa' || s === 'or' || s === 'ca';
 }
@@ -1875,7 +1875,7 @@ function computeAndRenderPL() {
     const constructionCost = parseFloat(document.getElementById('sliderConstruction').value);
     const demandRate = parseFloat(document.getElementById('sliderDemandRate').value);
 
-    const battInfo = batterySelected ? getBatteryCost() : null;
+    const battInfo = PL.plBatterySelected ? getBatteryCost() : null;
     const batteryCost = battInfo ? battInfo.cost : 0;
     const batteryLabel = battInfo ? battInfo.label : '';
     const includeLCFS = isLCFSState();
@@ -2088,7 +2088,7 @@ function exportToXlsx() {
         ws[cellAddr].s = { font: { bold: true } };
     }
 
-    const site = (PL.siteAddress || lastAddress || 'EV Site').replace(/[^a-z0-9\s]/gi, '').trim().replace(/\s+/g, '_').slice(0, 30);
+    const site = (PL.siteAddress || 'EV Site').replace(/[^a-z0-9\s]/gi, '').trim().replace(/\s+/g, '_').slice(0, 30);
     const date = new Date().toISOString().split('T')[0];
     const filename = `EV_PL_${site}_${date}.xlsx`;
 
