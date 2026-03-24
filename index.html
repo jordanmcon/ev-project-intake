@@ -108,6 +108,14 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
 .site-tag-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 5px rgba(74,222,128,0.5)}
 .add-spinner{display:inline-block;width:11px;height:11px;border:1.5px solid rgba(255,255,255,0.2);border-top-color:var(--text);border-radius:50%;animation:hex-spin .6s linear infinite;vertical-align:middle}
 #add-btn:disabled{opacity:0.6;cursor:not-allowed}
+.addr-wrap{position:relative;width:100%}
+.addr-suggestions{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--s2);border:1px solid var(--gold-border);border-radius:var(--r);z-index:200;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.4)}.addr-suggestions:empty{display:none}
+.addr-suggestion{padding:10px 14px;font-size:0.9rem;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s}
+.addr-suggestion:last-child{border-bottom:none}
+.addr-suggestion:hover,.addr-suggestion.active{background:var(--s3)}
+.addr-suggestion em{color:var(--gold);font-style:normal}
+.addr-loading{padding:10px 14px;font-size:0.82rem;color:var(--muted);font-family:var(--mono);letter-spacing:.04em}
+.addr-none{padding:10px 14px;font-size:0.82rem;color:#ff7070}
 .site-tags-wrap{display:flex;flex-wrap:wrap;margin-top:10px;min-height:20px}
 .upload-zone{border:1px dashed var(--border);border-radius:var(--r);padding:14px 18px;cursor:pointer;transition:all .17s;text-align:center;font-size:0.88rem;color:var(--muted)}
 .upload-zone:hover{border-color:var(--gold-border);color:var(--text)}
@@ -406,24 +414,132 @@ function calcFee(product, stalls, irrPct, creditNPV = 0) {
 function fmt(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
 
 // ── SITE MANAGEMENT ──────────────────────────────────────────
-function parseSiteText(txt) { return txt.split('\n').map(s=>s.trim()).filter(Boolean); }
 
-// Geocode a single address via Nominatim — returns resolved display_name or null
+// ── ADDRESS AUTOCOMPLETE ─────────────────────────────────────
+// All Nominatim calls are US-only via countrycodes=us
+const NOMINATIM = 'https://nominatim.openstreetmap.org';
+let _acTimer = null;      // debounce handle
+let _acActive = -1;       // keyboard-highlighted suggestion index
+let _acResults = [];      // current suggestion objects [{label, raw}]
+let _acAbort = null;      // AbortController for in-flight suggest fetch
+
+function nominatimUrl(endpoint, params) {
+  const base = `${NOMINATIM}/${endpoint}?format=json&countrycodes=us&accept-language=en&`;
+  return base + Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+}
+
+function buildLabel(result) {
+  const a = result.address || {};
+  const parts = [
+    a.house_number && a.road ? `${a.house_number} ${a.road}` : (a.road || null),
+    a.city || a.town || a.village || a.municipality || null,
+    a.state || null,
+    a.postcode || null,
+  ].filter(Boolean);
+  return parts.length >= 2 ? parts.join(', ') : result.display_name;
+}
+
+function closeSuggestions() {
+  const box = document.getElementById('addr-suggestions');
+  if (box) box.innerHTML = '';
+  _acActive = -1;
+  _acResults = [];
+}
+
+function renderSuggestions(items, query) {
+  const box = document.getElementById('addr-suggestions');
+  if (!box) return;
+  _acResults = items;
+  _acActive = -1;
+  if (!items.length) {
+    box.innerHTML = '<div class="addr-none">No US addresses found — try adding city and state</div>';
+    return;
+  }
+  // Bold the matching portion of the query in each suggestion
+  const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${esc})`, 'gi');
+  box.innerHTML = items.map((item, i) => {
+    const highlighted = item.label.replace(re, '<em>$1</em>');
+    return `<div class="addr-suggestion" data-i="${i}" onmousedown="pickSuggestion(${i})">${highlighted}</div>`;
+  }).join('');
+}
+
+function pickSuggestion(i) {
+  const item = _acResults[i];
+  if (!item) return;
+  closeSuggestions();
+  if (!S.sites.includes(item.label)) {
+    S.sites.push(item.label);
+    renderSiteTags();
+  }
+  const inp = document.getElementById('siteInput');
+  if (inp) inp.value = '';
+  document.getElementById('e-verify') && (document.getElementById('e-verify').style.display = 'none');
+}
+
+async function fetchSuggestions(query) {
+  if (_acAbort) _acAbort.abort();
+  _acAbort = new AbortController();
+  const box = document.getElementById('addr-suggestions');
+  if (box) box.innerHTML = '<div class="addr-loading">Searching…</div>';
+  try {
+    const url = nominatimUrl('search', { q: query, limit: 5, addressdetails: 1 });
+    const res = await fetch(url, {
+      signal: _acAbort.signal,
+      headers: { 'Accept-Language': 'en' }
+    });
+    const data = await res.json();
+    // Filter to US results only (belt-and-suspenders on top of countrycodes param)
+    const us = (data || []).filter(r => (r.address || {}).country_code === 'us');
+    renderSuggestions(us.map(r => ({ label: buildLabel(r), raw: r })), query);
+  } catch(e) {
+    if (e.name !== 'AbortError' && box) box.innerHTML = '';
+  }
+}
+
+function onSiteInput(e) {
+  const val = e.target.value.trim();
+  clearTimeout(_acTimer);
+  if (val.length < 4) { closeSuggestions(); return; }
+  _acTimer = setTimeout(() => fetchSuggestions(val), 350); // debounce 350ms
+}
+
+function onSiteKeydown(e) {
+  const box = document.getElementById('addr-suggestions');
+  const items = box ? box.querySelectorAll('.addr-suggestion') : [];
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _acActive = Math.min(_acActive + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === _acActive));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _acActive = Math.max(_acActive - 1, -1);
+    items.forEach((el, i) => el.classList.toggle('active', i === _acActive));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_acActive >= 0 && _acResults[_acActive]) {
+      pickSuggestion(_acActive);
+    } else {
+      addSiteFromInput();
+    }
+  } else if (e.key === 'Escape') {
+    closeSuggestions();
+  }
+}
+
+// ── VERIFY & ADD ─────────────────────────────────────────────
+// Used when user types freely and hits Add without picking a suggestion.
+// Verifies the raw text against Nominatim before committing, US-only.
 async function verifyAddress(raw) {
   try {
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=' + encodeURIComponent(raw);
+    const url = nominatimUrl('search', { q: raw, limit: 1, addressdetails: 1 });
     const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
     const data = await res.json();
     if (!data || !data.length) return null;
-    // Build a clean "Street, City, State ZIP" label from address parts
-    const a = data[0].address || {};
-    const parts = [
-      a.house_number && a.road ? `${a.house_number} ${a.road}` : (a.road || null),
-      a.city || a.town || a.village || a.county || null,
-      a.state || null,
-      a.postcode || null,
-    ].filter(Boolean);
-    return parts.length >= 2 ? parts.join(', ') : data[0].display_name;
+    const r = data[0];
+    if ((r.address || {}).country_code !== 'us') return null;
+    return buildLabel(r);
   } catch(e) {
     return null;
   }
@@ -440,8 +556,7 @@ function renderSiteTags() {
   if (counter) counter.textContent = S.sites.length ? `${S.sites.length} site${S.sites.length>1?'s':''}` : '';
 }
 
-function setAddBtn(state) {
-  // state: 'idle' | 'loading' | 'error'
+function setAddBtn(state, msg) {
   const btn = document.getElementById('add-btn');
   const err = document.getElementById('e-verify');
   if (!btn) return;
@@ -452,41 +567,32 @@ function setAddBtn(state) {
     btn.disabled = false;
     btn.innerHTML = '+ Add';
   }
-  if (err) err.style.display = state === 'error' ? 'block' : 'none';
+  if (err) {
+    err.style.display = state === 'error' ? 'block' : 'none';
+    if (state === 'error' && msg) err.textContent = msg;
+  }
 }
 
-async function addSitesFromText() {
-  const ta = document.getElementById('siteInput'); if (!ta) return;
-  const lines = parseSiteText(ta.value);
-  if (!lines.length) return;
-
+async function addSiteFromInput() {
+  const inp = document.getElementById('siteInput'); if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) return;
+  closeSuggestions();
+  if (S.sites.includes(val)) { inp.value = ''; return; }
   setAddBtn('loading');
-
-  const failed = [];
-  for (const line of lines) {
-    if (S.sites.includes(line)) continue; // skip exact dupes
-    const resolved = await verifyAddress(line);
-    if (resolved) {
-      if (!S.sites.includes(resolved)) S.sites.push(resolved);
-    } else {
-      failed.push(line);
-    }
-    await new Promise(r => setTimeout(r, 200)); // Nominatim rate limit
-  }
-
-  if (failed.length) {
-    const err = document.getElementById('e-verify');
-    if (err) {
-      err.textContent = `Could not verify: ${failed.join('; ')} — please check and try again.`;
-      err.style.display = 'block';
-    }
-    setAddBtn('error');
-  } else {
+  const resolved = await verifyAddress(val);
+  if (resolved) {
+    if (!S.sites.includes(resolved)) S.sites.push(resolved);
+    inp.value = '';
     setAddBtn('idle');
-    ta.value = '';
+  } else {
+    setAddBtn('error', `Could not verify "${val}" as a US address — please select from the suggestions or check the address.`);
   }
   renderSiteTags();
 }
+
+// Keep addSitesFromText as alias for backward compat (CSV flow, slide valid() hook)
+async function addSitesFromText() { await addSiteFromInput(); }
 
 function removeSite(i) { S.sites.splice(i,1); renderSiteTags(); }
 
@@ -507,15 +613,10 @@ function handleCSV(file) {
       } else {
         failed.push(line);
       }
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 200)); // Nominatim rate limit
     }
     if (failed.length) {
-      const err = document.getElementById('e-verify');
-      if (err) {
-        err.textContent = `Could not verify ${failed.length} address${failed.length>1?'es':''} from CSV — they were not added.`;
-        err.style.display = 'block';
-      }
-      setAddBtn('error');
+      setAddBtn('error', `Could not verify ${failed.length} address${failed.length>1?'es':''} from CSV — they were not added. Non-US addresses are not supported.`);
     } else {
       setAddBtn('idle');
     }
@@ -558,14 +659,20 @@ const SLIDES = [
   { render: () => `
     <div class="eyebrow">Step 1 — Sites</div>
     <h1>Enter your <em>site address${S.sites.length!==1?'es':''}</em>.</h1>
-    <p class="sub">One site or a full portfolio — enter addresses one per line and click Add, or import a CSV with one address per row.</p>
+    <p class="sub">One site or a full portfolio — type an address and select from suggestions, or import a CSV. US addresses only.</p>
     <div class="field">
-      <label>Site address(es) — include city and state</label>
-      <textarea id="siteInput" placeholder="123 Main St, Seattle, WA"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addSitesFromText();}"></textarea>
+      <label>Site address — include street, city, and state</label>
+      <div class="addr-wrap">
+        <input type="text" id="siteInput" placeholder="123 Main St, Seattle, WA"
+          autocomplete="off"
+          oninput="onSiteInput(event)"
+          onkeydown="onSiteKeydown(event)"
+          onblur="setTimeout(closeSuggestions, 150)">
+        <div id="addr-suggestions" class="addr-suggestions"></div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
-        <button id="add-btn" class="btn btn-ghost btn-sm" onclick="addSitesFromText()">+ Add</button>
-        <span style="font-size:0.78rem;color:var(--muted);font-family:var(--mono);">or press Enter</span>
+        <button id="add-btn" class="btn btn-ghost btn-sm" onclick="addSiteFromInput()">+ Add</button>
+        <span style="font-size:0.78rem;color:var(--muted);font-family:var(--mono);">or press Enter · select a suggestion to add instantly</span>
       </div>
       <div class="ferr" id="e-sites">Please add at least one site address.</div>
       <div class="ferr" id="e-verify" style="display:none;"></div>
@@ -580,10 +687,16 @@ const SLIDES = [
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
-  `, onEnter: () => renderSiteTags(),
+  `, onEnter: () => { renderSiteTags(); closeSuggestions(); },
      valid: () => {
-       const ta = document.getElementById('siteInput');
-       if (ta && ta.value.trim()) addSitesFromText();
+       const inp = document.getElementById('siteInput');
+       if (inp && inp.value.trim()) {
+         // If there's text in the field and no suggestion was picked, block and show error
+         document.getElementById('e-verify').textContent = 'Please select an address from the suggestions before continuing.';
+         document.getElementById('e-verify').style.display = 'block';
+         return false;
+       }
+       document.getElementById('e-verify').style.display = 'none';
        if (!S.sites.length) { document.getElementById('e-sites').style.display='block'; return false; }
        document.getElementById('e-sites').style.display='none';
        return true;
