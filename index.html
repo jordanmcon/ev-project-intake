@@ -507,6 +507,204 @@ function handleIntakeCSV(file) {
   reader.readAsText(file);
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// ── CaaS ENGINE ──────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+// Fee table (from EE___MN8_CaaS_Calculator XLSX, IRR=12%)
+const TABLE_FEES = {
+  re400: { 4:{noLcfs:187000,lcfs:117000}, 6:{noLcfs:258000,lcfs:154000}, 8:{noLcfs:329000,lcfs:191000} },
+  base:  { 4:{noLcfs:116000,lcfs: 76000}, 6:{noLcfs:160000,lcfs:101000}, 8:{noLcfs:197000,lcfs:118000} },
+};
+const TABLE_STALLS = [4,6,8];
+const LCFS_STATES_CAAS = ['CA','OR','WA','CALIFORNIA','OREGON','WASHINGTON'];
+
+function isLCFSEligibleCaaS(address) {
+  const u = address.toUpperCase();
+  return LCFS_STATES_CAAS.some(s => new RegExp('\\b'+s+'\\b').test(u));
+}
+function lookupFee(product, stalls, lcfsEligible) {
+  const capped  = stalls > 8;
+  const snapKey = capped ? 8 : (TABLE_STALLS.includes(stalls) ? stalls : 8);
+  const row     = TABLE_FEES[product]?.[snapKey] || TABLE_FEES.base[8];
+  const annual  = lcfsEligible ? row.lcfs : row.noLcfs;
+  return { annual, monthly: annual/12, total10: annual*10, lcfs: lcfsEligible, capped, snapStalls: snapKey };
+}
+function fmtFee(n, capped) { return '$'+Math.round(n).toLocaleString('en-US')+(capped?'+':''); }
+function fmtC(n) { return '$'+Math.round(n).toLocaleString('en-US'); }
+
+// Hex lookup for CaaS (reuses P&L hex data loader)
+async function lookupSPDForCaaS(address) {
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(address);
+    const res = await fetch(url, {headers:{'Accept-Language':'en'}});
+    const data = await res.json();
+    if (!data?.length) return null;
+    const lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
+    const hexData = await loadPLHexData();
+    if (hexData) {
+      const hex = findPLHexagon(lat, lon);
+      if (hex) return { spd: Math.max(5, Math.min(100, Math.round(hex.daily_sessions))), lat, lon };
+    }
+    return { spd: null, lat, lon };
+  } catch(e) { return null; }
+}
+
+// ── CaaS QUOTE RENDERER ───────────────────────────────────────
+async function renderCaaSQuote(qWrap) {
+  qWrap.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:18px;">
+      <div style="width:38px;height:38px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;"></div>
+      <div style="font-family:var(--mono);font-size:0.85rem;color:var(--muted);">Looking up utilization data…</div>
+    </div>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
+
+  const sites = S.sites.length ? S.sites : (S.siteAddress ? [S.siteAddress] : []);
+  const n = sites.length;
+  const isPortfolio = n > 1;
+
+  // Geocode all sites
+  const siteResults = [];
+  for (const addr of sites) {
+    const r = await lookupSPDForCaaS(addr);
+    const eligible = isLCFSEligibleCaaS(addr);
+    const spd = r?.spd ?? 20;
+    const fee = lookupFee(S.caasProduct, S.stalls, eligible);
+    siteResults.push({ address:addr, spd, eligible, fee, hasData: r?.spd !== null });
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+
+  const portMonthly = siteResults.reduce((a,s) => a+s.fee.monthly, 0);
+  const portAnnual  = siteResults.reduce((a,s) => a+s.fee.annual,  0);
+  const port10yr    = siteResults.reduce((a,s) => a+s.fee.total10, 0);
+  const anyCapped   = siteResults.some(s => s.fee.capped);
+  const productMeta = {base:{label:'Base Station',kw:200},re400:{label:'RE400',kw:400}}[S.caasProduct]||{label:'—',kw:'—'};
+  const LCFS_BADGE  = `<span style="font-size:0.62rem;font-family:var(--mono);background:rgba(248,185,24,.10);border:1px solid var(--gold-border);border-radius:3px;padding:1px 5px;color:var(--gold);margin-left:6px;vertical-align:middle;letter-spacing:.04em;">LCFS</span>`;
+  const startLabel  = S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
+  const bizLabel    = {'business-owner':'Business Owner',cpo:'Charge Point Operator',distributor:'Distributor',vendor:'Vendor',other:'Other'}[S.businessType]||'—';
+
+  const siteRows = isPortfolio ? siteResults.map(sd => `
+    <div class="q-row" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;">
+      <span style="color:var(--dim);font-size:0.82rem;">${sd.address}${sd.eligible?LCFS_BADGE:''}</span>
+      <span style="font-family:var(--mono);font-size:.92rem;">${fmtFee(sd.fee.monthly,sd.fee.capped)}/mo</span>
+      <span style="font-family:var(--mono);font-size:.92rem;">${fmtFee(sd.fee.annual,sd.fee.capped)}/yr</span>
+      <span style="font-family:var(--mono);font-size:.82rem;color:var(--muted);">${sd.hasData?sd.spd+' SPD':'No data'}</span>
+    </div>`).join('') : '';
+
+  const logoSVG = document.querySelector('.q-logo')?.innerHTML || '';
+
+  qWrap.innerHTML = `
+    <div class="q-head">
+      <div>
+        <div class="q-logo">${logoSVG}</div>
+        <div style="margin-top:16px;">
+          <div class="q-title">Charging as a Service Quote</div>
+          <div class="q-subtitle">Prepared for ${S.firstName} ${S.lastName}</div>
+        </div>
+      </div>
+      <div class="q-meta">
+        <div class="q-id">Quote #${S.quoteId}</div>
+        <div class="q-date">${S.quoteDate}</div>
+        <div class="q-badge">INDICATIVE · 10-YEAR TERM</div>
+        <div style="margin-top:14px;">
+          <button class="btn btn-ghost" onclick="savePdf()" style="padding:8px 16px;font-size:.88rem;">Save as PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="q-sec">
+      <div class="q-sec-title-row"><div class="q-sec-title">Project Overview</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
+      <div class="q-info-grid">
+        <div class="q-info-card"><div class="qi-label">Contact</div><div class="qi-val">${S.firstName} ${S.lastName}</div></div>
+        <div class="q-info-card"><div class="qi-label">Email</div><div class="qi-val">${S.email}</div></div>
+        <div class="q-info-card"><div class="qi-label">Business Type</div><div class="qi-val">${bizLabel}</div></div>
+        <div class="q-info-card"><div class="qi-label">Budget Approach</div><div class="qi-val">Charging as a Service</div></div>
+        <div class="q-info-card"><div class="qi-label">Site${n>1?'s':''}</div><div class="qi-val">${sites.join(' · ')}</div></div>
+        <div class="q-info-card"><div class="qi-label">Target Completion</div><div class="qi-val">${startLabel}</div></div>
+      </div>
+    </div>
+
+    <div class="q-sec">
+      <div class="q-sec-title-row"><div class="q-sec-title">${isPortfolio?'Portfolio CaaS Fee':'Monthly CaaS Fee'}</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit sites/stalls ↗</button></div>
+      <div style="background:var(--s2);border:1px solid var(--gold-border);border-radius:var(--r);padding:30px 30px 26px;position:relative;overflow:hidden;margin-bottom:10px;">
+        <div style="position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 120%,rgba(248,185,24,.09) 0%,transparent 70%);pointer-events:none;"></div>
+        <div style="font-size:.72rem;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:12px;">${isPortfolio?'Total portfolio monthly fee':'Monthly subscription fee'}</div>
+        <div style="font-size:62px;font-weight:400;color:var(--gold);font-family:var(--mono);letter-spacing:-.04em;line-height:1;">${fmtFee(portMonthly,anyCapped)}</div>
+        <div style="font-size:.95rem;color:var(--dim);margin-top:6px;">per month · fixed for 10-year term${isPortfolio?' · '+n+' sites':''}${anyCapped?' · indicative minimum':''}</div>
+        <div style="font-size:.78rem;font-family:var(--mono);color:var(--muted);margin-top:5px;">${fmtFee(portAnnual,anyCapped)}/yr · ${fmtFee(port10yr,anyCapped)} over full term</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr${isPortfolio?' 1fr':''};gap:8px;margin-bottom:10px;">
+        ${isPortfolio?`<div class="metric-card"><div class="metric-label">Per-site monthly</div><div class="metric-val">${fmtFee(siteResults[0].fee.monthly,siteResults[0].fee.capped)}</div><div class="metric-sub">${fmtFee(siteResults[0].fee.annual,siteResults[0].fee.capped)}/yr per site</div></div>`:''}
+        <div class="metric-card"><div class="metric-label">${isPortfolio?'Portfolio annual':'Annual fee'}</div><div class="metric-val">${fmtFee(portAnnual,anyCapped)}</div><div class="metric-sub">${fmtFee(port10yr,anyCapped)} over 10 years</div></div>
+        <div class="metric-card"><div class="metric-label">Contract term</div><div class="metric-val">10 years</div><div class="metric-sub">Fixed monthly, no CapEx</div></div>
+      </div>
+    </div>
+
+    ${isPortfolio?`
+    <div class="q-sec">
+      <div class="q-sec-title">Fee by site</div>
+      <div class="q-table">
+        <div class="q-row" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;opacity:.6;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;">
+          <span>Address</span><span>Monthly</span><span>Annual</span><span>SPD</span>
+        </div>
+        ${siteRows}
+        <div class="q-row" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;border-top:1px solid var(--gold-border);color:var(--gold);font-weight:600;">
+          <span>Portfolio total</span>
+          <span style="font-family:var(--mono);">${fmtFee(portMonthly,anyCapped)}/mo</span>
+          <span style="font-family:var(--mono);">${fmtFee(portAnnual,anyCapped)}/yr</span>
+          <span></span>
+        </div>
+      </div>
+    </div>`:``}
+
+    <div class="q-sec">
+      <div class="q-sec-title-row"><div class="q-sec-title">Station Configuration</div><button class="q-edit-btn" onclick="goBackFromQuote(4)">Edit ↗</button></div>
+      <div class="q-table">
+        <div class="q-row"><span class="q-row-name">Charger model</span><span class="q-price">${productMeta.label} (${productMeta.kw} kW/port)</span></div>
+        <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls}${anyCapped?'+':''} per site</span></div>
+        <div class="q-row"><span class="q-row-name">Sites</span><span class="q-price">${n}</span></div>
+        <div class="q-row"><span class="q-row-name">Contract term</span><span class="q-price">10 years · fixed fee, no CapEx</span></div>
+      </div>
+    </div>
+
+    <div class="q-sec">
+      <div class="q-sec-title">What's included</div>
+      <div class="inc-list">
+        ${[['Hardware procurement & installation','Charger equipment, electrical, and permitting coordination.'],
+           ['Full-term O&M (10 years)','Preventative and corrective maintenance included.'],
+           ['HaloAI on-charger software','Driver support, remote diagnostics, and retail experience features.'],
+           ['Network & connectivity','LTE/WiFi, OCPP compliance, and cloud monitoring.'],
+           ['No upfront CapEx','Fixed monthly subscription — capital expenditure not required.'],
+          ].map(([t,s])=>`<div class="inc-item"><span class="inc-ck">✓</span><div><div class="inc-title">${t}</div><div class="inc-sub">${s}</div></div></div>`).join('')}
+      </div>
+    </div>
+
+    <div style="margin:10px 0 8px;">
+      <button class="btn btn-primary" onclick="showPLPage()" style="width:100%;justify-content:center;padding:16px 22px;font-size:1.02rem;">
+        <svg viewBox="0 0 14 14" fill="none" style="width:16px;height:16px;"><path d="M1 10l4-4 3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Generate a 10-Year P&amp;L
+      </button>
+    </div>
+
+    <div class="q-note" style="border-color:var(--gold-border);">
+      <div><div class="q-note-title">Next Steps</div><div class="q-note-body">
+        <ul style="padding-left:18px;">
+          <li>An Electric Era representative will follow up to confirm final pricing and initiate site assessment</li>
+          <li>CaaS fees shown are indicative — final fee is subject to site review and credit assessment</li>
+          <li>Review the <a href="https://electricera.tech/terms-conditions" target="_blank" style="text-decoration:underline;color:var(--gold);">Terms and Conditions</a></li>
+        </ul>
+      </div></div>
+    </div>
+    <div class="q-actions" style="margin-top:18px;">
+      <button class="btn btn-ghost" onclick="restart()" style="font-size:1rem;color:var(--muted);">Start another project</button>
+    </div>
+    <div class="q-disclaimer">This quote is indicative and for discussion purposes only. Actual CaaS fees are subject to final site assessment. © ${new Date().getFullYear()} Electric Era Technologies, Inc.</div>
+  `;
+}
+// ══════════════════════════════════════════════════════════════
+// ── END CaaS ENGINE ───────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
 // ── GRANTS CONFIG ─────────────────────────────────────────────
 // ┌─────────────────────────────────────────────────────────────────────────────┐
 // │  GRANT PROGRAMS — edit this object to add, update, or remove grants.        │
@@ -571,6 +769,8 @@ const S = {
   sites: [],             // multi-site array for P&L
   stalls: 4,
   budget: '',           // 'allocated'|'financed'
+  caasProduct: null,    // 'base'|'re400'
+  caasAnnualFee: 0,     // set before HubSpot submit
   battery: null,        // 'none'|'125kw'|'250kw'
   retailPrograms: [],   // multi: 'rmn'|'loyalty'|'membership' or ['none']
   addDesign: false, addEPC: false, addConstruction: false, addNone: false,
@@ -758,6 +958,62 @@ const SLIDES = [
       return ok;
   }},
 
+
+  // ── CaaS: PRODUCT SELECTION (slide 4) ──────────────────────
+  { step:2, isCaaS:true, render:()=>`
+    <div class="eyebrow">CaaS Configuration</div>
+    <h1>Which <em>charging product</em>?</h1>
+    <p class="sub">Your site(s) and stall count carry over. Just pick the charger model.</p>
+    <div class="choices" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+      ${[
+        ['base',  'Base Station',  '200 kW / port', 'SK Signet FC200K — 4, 6, or 8 stall configs. Ideal for moderate demand charges.'],
+        ['re400', 'RE400',         '400 kW / port', 'Electric Era RE400 with HaloAI — up to 8 stalls. Built for high-traffic retail sites.'],
+      ].map(([v,label,kw,desc],i)=>`
+        <div class="choice ${S.caasProduct===v?'sel':''}" onclick="S.caasProduct='${v}';this.closest('.choices').querySelectorAll('.choice').forEach(el=>el.classList.remove('sel'));this.classList.add('sel');">
+          <div class="ck">${String.fromCharCode(65+i)}</div>
+          <div class="cb">
+            <div class="ct">${label}</div>
+            <div style="font-size:.8rem;font-family:var(--mono);color:var(--gold);margin:3px 0 4px;">${kw}</div>
+            <div class="cd">${desc}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;font-size:.82rem;color:var(--muted);font-family:var(--mono);">
+      <span style="color:var(--gold);">Site${S.sites.length>1?'s':''}: </span>${S.sites.length?S.sites.join(' · '):(S.siteAddress||'—')} &nbsp;·&nbsp;
+      <span style="color:var(--gold);">Stalls: </span>${S.stalls}
+    </div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn btn-ghost" onclick="prev()">Back</button>
+    </div>
+  `, valid:()=>{ if(!S.caasProduct){toast('Please select a charger model.');return false;} return true; }},
+
+  // ── CaaS: SUMMARY (slide 5) ──────────────────────────────────
+  { step:3, isCaaS:true, render:()=>{
+    const productLabel={base:'Base Station (200 kW/port)',re400:'RE400 (400 kW/port)'}[S.caasProduct]||'—';
+    return `
+    <div class="eyebrow">CaaS — Summary</div>
+    <h1>Here's your <em>CaaS configuration</em>.</h1>
+    <p class="sub">Review before generating your indicative quote.</p>
+    <div class="sum-grid" style="margin-bottom:18px;">
+      <div class="sum-card"><div class="sum-label">Site${S.sites.length>1?'s':''}</div><div class="sum-val gold" style="font-size:.9rem;">${S.sites.length?S.sites.join('<br>'):(S.siteAddress||'—')}</div></div>
+      <div class="sum-card"><div class="sum-label">Stalls</div><div class="sum-val gold">${S.stalls} per site</div></div>
+      <div class="sum-card" style="position:relative;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div><div class="sum-label">Charger Model</div><div class="sum-val">${productLabel}</div></div>
+          <button onclick="go(4)" style="background:none;border:none;cursor:pointer;font-size:.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+        </div>
+      </div>
+      <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">Charging as a Service</div></div>
+    </div>
+    <div class="sec-label">Ideal Completion Date</div>
+    <div class="date-grid">${makeDatePills()}</div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="validateAndShowQuote()">Generate My CaaS Quote <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn btn-ghost" onclick="prev()">Back</button>
+    </div>`;
+  }, valid:()=>{ if(!S.startDate){toast('Please select a completion date.');return false;} return true; }},
+
   // 4 — BATTERY INTERSTITIAL
   { step:2, render:()=>`
     <div class="eyebrow">Energy Management Plan</div>
@@ -932,10 +1188,21 @@ const SLIDES = [
 
 // ── NAV ──────────────────────────────────────────────────────
 let cur = 0;
-function next(){ const s=SLIDES[cur]; if(s.valid&&!s.valid())return; if(cur<SLIDES.length-1)go(cur+1); }
-function prev(){ if(cur>0)go(cur-1); }
+function next(){
+  const s=SLIDES[cur]; if(s.valid&&!s.valid())return;
+  let t=cur+1;
+  if(S.budget==='allocated' && SLIDES[t]?.isCaaS) { while(t<SLIDES.length && SLIDES[t].isCaaS) t++; }
+  if(t<SLIDES.length) go(t);
+}
+function prev(){
+  if(cur<=0) return;
+  let t=cur-1;
+  if(S.budget==='allocated' && SLIDES[t]?.isCaaS) { while(t>0 && SLIDES[t].isCaaS) t--; }
+  go(t);
+}
 function validateAndShowQuote(){
   if(!S.startDate){ toast('Please select a completion date.'); return; }
+  if(S.budget==='financed'){ showQuote(); return; }
   if(!S.addDesign && !S.addEPC && !S.addConstruction && !S.addNone){
     const err=document.getElementById('addon-err');
     if(err){ err.style.display='block'; err.scrollIntoView({behavior:'smooth',block:'center'}); }
@@ -1171,6 +1438,11 @@ async function submitToHubSpot() {
     cpq_site_address:             (S.sites&&S.sites.length ? S.sites.join('; ') : S.siteAddress) || '',
   };
 
+  // ── CaaS fee ─────────────────────────────────────────────────────────────────
+  if(S.budget==='financed' && S.caasAnnualFee){
+    dealProperties.cpq_caas_fee = S.caasAnnualFee;
+  }
+
   // ── Grant fields ──────────────────────────────────────────────────────────
   if (S.grant && GRANTS[S.grant]) {
     const grantDeduction  = calcGrantDeduction(pricing.subtotal);
@@ -1216,20 +1488,28 @@ async function trackStep(n) {
 
 async function showQuote(){
   if(!S.startDate){toast('Please select a completion date.');return;}
-
-  // Generate quote ID first so it can be sent to HubSpot
   S.quoteId='EE-'+Date.now().toString(36).toUpperCase().slice(-6);
   S.quoteDate=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-
-  // Show loading state on the button
   const btn = document.querySelector('[onclick="validateAndShowQuote()"]');
   if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
 
-  try {
-    await submitToHubSpot();
-  } catch(err) {
-    console.error('HubSpot submission error:', err);
+  if(S.budget==='financed'){
+    // Pre-compute indicative CaaS fee for HubSpot
+    const _sites = S.sites.length ? S.sites : (S.siteAddress ? [S.siteAddress] : []);
+    const _eligible = _sites.length ? isLCFSEligibleCaaS(_sites[0]) : false;
+    const _fee = lookupFee(S.caasProduct||'base', S.stalls, _eligible);
+    S.caasAnnualFee = Math.round(_fee.annual * Math.max(1, _sites.length));
+    try { await submitToHubSpot(); } catch(err){ console.error('HubSpot error:',err); }
+    window.location.hash='quote';
+    document.getElementById('app').classList.add('gone');
+    const qp=document.getElementById('quote-page'); qp.classList.add('on');
+    document.getElementById('prog-bar').style.width='100%';
+    document.getElementById('prog-lbl').textContent='100% complete';
+    await renderCaaSQuote(document.getElementById('q-wrap'));
+    return;
   }
+
+  try { await submitToHubSpot(); } catch(err){ console.error('HubSpot submission error:', err); }
   window.location.hash='quote';
   document.getElementById('app').classList.add('gone');
   const qp=document.getElementById('quote-page');qp.classList.add('on');
@@ -1505,7 +1785,7 @@ function restart(){
   // Re-detect grant from URL param on restart so campaign links stay active
   const urlGrant = new URLSearchParams(window.location.search).get('grant');
   const grantOnRestart = (urlGrant && GRANTS[urlGrant]) ? urlGrant : '';
-  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',sites:[],stalls:4,budget:'',battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
+  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',sites:[],stalls:4,budget:'',caasProduct:null,caasAnnualFee:0,battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
   // Clear hash without triggering the hashchange listener
   window.removeEventListener('hashchange', onHashChange);
   document.getElementById('pl-page').classList.remove('on');
@@ -2276,6 +2556,13 @@ async function showPLPage() {
   window.location.hash = 'pl';
 
   const wrap = document.getElementById('pl-wrap');
+  // CaaS path gets a simplified P&L
+  if (S.budget === 'financed') {
+    wrap.innerHTML = renderCaaSPLShell();
+    wireCaaSPLSliders();
+    await loadAndFinalizeCaaSPL();
+    return;
+  }
   wrap.innerHTML = renderPLShell();
   wirePLSliders();
 
@@ -2602,6 +2889,269 @@ function renderPLShell() {
 
     <div class="pl-disclaimer">
       This model is for illustrative purposes only. Actual results will vary based on site conditions, utility rates, and real-world demand. Not a guarantee of financial performance.
+    </div>
+  `;
+}
+
+// ── CaaS P&L ──────────────────────────────────────────────────
+// Simplified: revenue from SPD, elec cost from SPD, only OpEx = CaaS fee.
+// No CapEx → no IRR/breakeven in the traditional sense.
+
+function computeCaaSPL(spd, chargingPrice, elecCost, caasAnnualFee) {
+  const KWH = 35, UPTIME = 0.995, PAYMENT_FEE = 0.065, SESSION_GROWTH = 0.10, PRICE_INF = 0.03;
+  const years = [];
+  for (let y = 1; y <= 10; y++) {
+    const growth = Math.pow(1 + SESSION_GROWTH, y-1);
+    const inf    = Math.pow(1 + PRICE_INF,     y-1);
+    const sessions = spd * 365 * growth;
+    const kwh = sessions * KWH * UPTIME;
+    const grossRevenue = kwh * chargingPrice * inf;
+    const paymentFee   = grossRevenue * PAYMENT_FEE;
+    const netRevenue   = grossRevenue - paymentFee;
+    const energyCost   = (kwh / 0.9) * elecCost * inf;
+    const caasOpEx     = caasAnnualFee; // fixed, no inflation — already baked into fee
+    const netProfit    = netRevenue - energyCost - caasOpEx;
+    years.push({ y, sessions: Math.round(sessions), grossRevenue, paymentFee, netRevenue, energyCost, caasOpEx, netProfit });
+  }
+  const totalRevenue = years.reduce((a,y) => a + y.grossRevenue, 0);
+  const totalNetRevenue = years.reduce((a,y) => a + y.netRevenue, 0);
+  const totalEnergy  = years.reduce((a,y) => a + y.energyCost, 0);
+  const totalCaaS    = years.reduce((a,y) => a + y.caasOpEx, 0);
+  const totalProfit  = years.reduce((a,y) => a + y.netProfit, 0);
+  return { years, totalRevenue, totalNetRevenue, totalEnergy, totalCaaS, totalProfit };
+}
+
+function computeAndRenderCaaSPL() {
+  const spd = parseInt(document.getElementById('caas-sliderSPD').value);
+  const cp  = parseFloat(document.getElementById('caas-sliderChargingPrice').value);
+  const ec  = parseFloat(document.getElementById('caas-sliderElecPrice').value);
+  const caasAnnual = PL.caasAnnualFee || S.caasAnnualFee || 0;
+
+  const r = computeCaaSPL(spd, cp, ec, caasAnnual);
+
+  // Update display value spans
+  document.getElementById('caas-valSPD').textContent          = spd;
+  document.getElementById('caas-valChargingPrice').textContent = '$'+cp.toFixed(2);
+  document.getElementById('caas-valElecPrice').textContent     = '$'+ec.toFixed(2);
+
+  // Metrics
+  document.getElementById('caas-m-revenue').textContent  = fmtCurrency(r.totalRevenue);
+  document.getElementById('caas-m-energy').textContent   = fmtCurrency(r.totalEnergy);
+  document.getElementById('caas-m-caas').textContent     = fmtCurrency(r.totalCaaS);
+  document.getElementById('caas-m-profit').textContent   = fmtCurrency(r.totalProfit);
+  document.getElementById('caas-m-profit').className = 'pl-metric-value' + (r.totalProfit >= 0 ? ' gold' : '');
+
+  // Table
+  const thead = document.getElementById('caas-plTableHead');
+  const tbody = document.getElementById('caas-plTableBody');
+  let th = '<th>Line Item</th>';
+  for (let y = 1; y <= 10; y++) th += `<th>Yr ${y}</th>`;
+  th += '<th class="total-col">Total</th>';
+  thead.innerHTML = th;
+
+  function row(label, vals, cls='', fmt=fmtCurrencyFull, showTotal=true) {
+    const total = vals.reduce((a,v)=>a+v,0);
+    const cells = vals.map(v => `<td class="${v<0?'neg':v>0?'pos':''}">${fmt(v)}</td>`).join('');
+    const totalCell = showTotal ? `<td class="total-col ${total<0?'neg':total>0?'pos':''}">${fmt(total)}</td>` : '<td class="total-col">—</td>';
+    return `<tr class="${cls}"><td>${label}</td>${cells}${totalCell}</tr>`;
+  }
+  function sRow(label) { return `<tr class="section-header"><td colspan="12">${label}</td></tr>`; }
+
+  let html = '';
+  html += sRow('REVENUE');
+  html += row('Gross charging revenue', r.years.map(y=>y.grossRevenue));
+  html += row('Payment processing fee', r.years.map(y=>-y.paymentFee));
+  html += row('Net charging revenue',   r.years.map(y=>y.netRevenue), 'subtotal');
+  html += sRow('OPERATING COSTS');
+  html += row('Electricity cost',       r.years.map(y=>-y.energyCost));
+  html += row('CaaS subscription fee',  r.years.map(y=>-y.caasOpEx));
+  html += sRow('NET PROFIT');
+  html += row('Net operating profit',   r.years.map(y=>y.netProfit), 'grand-total', fmtCurrencyFull, true);
+  tbody.innerHTML = html;
+
+  // Cash flow chart
+  const cfCtx = document.getElementById('caas-cashflowChart').getContext('2d');
+  if (window._caasCFChart instanceof Chart) window._caasCFChart.destroy();
+  let cum = 0;
+  const cumData = r.years.map(y => { cum += y.netProfit; return Math.round(cum); });
+  window._caasCFChart = new Chart(cfCtx, {
+    type: 'line',
+    data: {
+      labels: r.years.map(y => 'Year '+y.y),
+      datasets: [{
+        label: 'Cumulative Net Profit',
+        data: cumData,
+        borderColor: '#F8B918', backgroundColor: 'rgba(248,185,24,0.08)',
+        borderWidth: 2.5, fill: true, tension: 0.35,
+        pointBackgroundColor: cumData.map(v => v>=0?'#22C55E':'#EF4444'),
+        pointBorderColor:     cumData.map(v => v>=0?'#22C55E':'#EF4444'),
+        pointRadius: 5, pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ' '+fmtCurrencyFull(ctx.parsed.y) }}},
+      scales: {
+        x: { grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#888', font:{size:11} } },
+        y: { grid:{ color:'rgba(255,255,255,0.06)' }, ticks:{ color:'#888', font:{size:11}, callback: v => fmtCurrency(v) },
+             title:{ display:true, text:'Cumulative Net Profit ($)', color:'#7A7A96', font:{size:11} } }
+      }
+    }
+  });
+}
+
+function wireCaaSPLSliders() {
+  [['caas-sliderSPD','caas-valSPD'], ['caas-sliderChargingPrice','caas-valChargingPrice'], ['caas-sliderElecPrice','caas-valElecPrice']]
+    .forEach(([sid,vid]) => {
+      const el = document.getElementById(sid); if(!el) return;
+      el.addEventListener('input', () => computeAndRenderCaaSPL());
+    });
+}
+
+async function loadAndFinalizeCaaSPL() {
+  const sites = S.sites.length ? S.sites : (S.siteAddress ? [S.siteAddress] : []);
+  const loadEl = document.getElementById('caas-pl-loading');
+  if (loadEl) loadEl.style.display = 'flex';
+
+  // Geocode + SPD lookup (portfolio sum)
+  let totalSPD = 0, firstGeo = null;
+  for (const addr of sites) {
+    const r = await lookupSPDForCaaS(addr);
+    totalSPD += r?.spd ?? 20;
+    if (!firstGeo && r?.lat) firstGeo = r;
+    await new Promise(res => setTimeout(res, 250));
+  }
+  if (loadEl) loadEl.style.display = 'none';
+
+  // Store for use in compute
+  PL.caasAnnualFee = S.caasAnnualFee || 0;
+  PL.siteAddress   = sites.length === 1 ? sites[0] : sites.length+'-Site Portfolio';
+  const spd = Math.max(5, totalSPD);
+
+  // Update stat cards
+  const yr1  = Math.round(spd * 365);
+  const yr10 = Math.round(spd * 365 * Math.pow(1.10, 9));
+  document.getElementById('caas-stat-spd')?.  (el => el && (el.textContent = spd+(sites.length>1?' total':'')));
+  document.getElementById('caas-stat-yr1')?.  (el => el && (el.textContent = plFmtNum(yr1)));
+  document.getElementById('caas-stat-yr10')?.  (el => el && (el.textContent = plFmtNum(yr10)));
+  const siteEl = document.getElementById('caas-site-label');
+  if (siteEl) siteEl.textContent = PL.siteAddress;
+
+  // Fix these with direct getElementById
+  const spdEl  = document.getElementById('caas-stat-spd');  if(spdEl)  spdEl.textContent  = spd+(sites.length>1?' total':'');
+  const yr1El  = document.getElementById('caas-stat-yr1');  if(yr1El)  yr1El.textContent  = plFmtNum(yr1);
+  const yr10El = document.getElementById('caas-stat-yr10'); if(yr10El) yr10El.textContent = plFmtNum(yr10);
+
+  // Set sliders
+  const spdSlider = document.getElementById('caas-sliderSPD');
+  if (spdSlider) { spdSlider.max = Math.max(100, spd*1.5); spdSlider.value = spd; }
+
+  // Map
+  if (firstGeo) renderPLMap(firstGeo.lat, firstGeo.lon, sites[0]);
+
+  computeAndRenderCaaSPL();
+}
+
+function renderCaaSPLShell() {
+  const caasAnnual = S.caasAnnualFee || 0;
+  const productLabel = {base:'Base Station',re400:'RE400'}[S.caasProduct]||'—';
+  const sites = S.sites.length ? S.sites : (S.siteAddress ? [S.siteAddress] : ['—']);
+  return `
+    <div style="border-bottom:1px solid var(--border);padding:16px 0;margin-bottom:0;display:flex;align-items:center;justify-content:space-between;">
+      <button class="btn btn-ghost" onclick="backToQuoteFromPL()" style="padding:8px 16px;font-size:.88rem;">← Back to Quote</button>
+      <span style="font-size:.78rem;font-family:var(--mono);color:var(--muted);">CaaS 10-Year P&amp;L</span>
+      <div style="width:120px;"></div>
+    </div>
+
+    <div class="pl-hero">
+      <h2>CaaS 10-Year P&amp;L</h2>
+      <p id="caas-site-label" style="color:var(--gold);font-family:var(--mono);font-size:.9rem;margin-top:.5rem;">Loading…</p>
+    </div>
+
+    <div id="caas-pl-loading" style="display:flex;flex-direction:column;align-items:center;padding:2rem 0;gap:14px;">
+      <div style="width:36px;height:36px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;"></div>
+      <div style="font-family:var(--mono);font-size:.82rem;color:var(--muted);">Looking up utilization data…</div>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="pl-stats-grid">
+      <div class="pl-stat-card"><div class="pl-stat-label">Sessions / Day</div><div class="pl-stat-value gold" id="caas-stat-spd">--</div><div class="pl-stat-sub">Year 1 (from Paren data)</div></div>
+      <div class="pl-stat-card"><div class="pl-stat-label">Year 1 Sessions</div><div class="pl-stat-value" id="caas-stat-yr1">--</div><div class="pl-stat-sub">Annual total</div></div>
+      <div class="pl-stat-card"><div class="pl-stat-label">Year 10 Sessions</div><div class="pl-stat-value" id="caas-stat-yr10">--</div><div class="pl-stat-sub">10% annual growth</div></div>
+    </div>
+
+    <!-- Context card -->
+    <div class="pl-card" style="border-color:var(--gold-border);">
+      <div class="pl-card-title">CaaS Configuration</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:.85rem;">
+        <div><span style="color:var(--muted);">Charger: </span><span style="color:var(--gold);">${productLabel}</span></div>
+        <div><span style="color:var(--muted);">Stalls: </span><span style="color:var(--gold);">${S.stalls}/site</span></div>
+        <div><span style="color:var(--muted);">CaaS fee: </span><span style="color:var(--gold);">$${Math.round(caasAnnual/12).toLocaleString()}/mo · $${Math.round(caasAnnual).toLocaleString()}/yr</span></div>
+        <div><span style="color:var(--muted);">Sites: </span><span style="color:var(--gold);">${sites.length}</span></div>
+      </div>
+    </div>
+
+    <!-- Site map -->
+    <div class="pl-card">
+      <div class="pl-card-title">Site Location</div>
+      <div id="pl-map" style="height:280px;border-radius:8px;overflow:hidden;background:var(--s3);"></div>
+    </div>
+
+    <!-- Sliders (simplified — no hardware/construction) -->
+    <div class="pl-card">
+      <div class="pl-card-title">Operating Assumptions</div>
+      <div class="pl-card-sub">CaaS fee is fixed. Adjust sessions, charging price, and electricity cost.</div>
+      <div class="pl-slider-grid">
+        <div class="pl-slider-group">
+          <div class="pl-slider-header"><span class="pl-slider-label">Sessions / Day</span><span class="pl-slider-value" id="caas-valSPD">--</span></div>
+          <div class="pl-slider-desc">Year 1 baseline (pre-filled from Paren data)</div>
+          <input type="range" class="pl-range" id="caas-sliderSPD" min="5" max="100" step="1" value="20">
+          <div class="pl-slider-range"><span>5</span><span>100</span></div>
+        </div>
+        <div class="pl-slider-group">
+          <div class="pl-slider-header"><span class="pl-slider-label">Charging Price</span><span class="pl-slider-value" id="caas-valChargingPrice">$0.50</span></div>
+          <div class="pl-slider-desc">Price charged to customers ($/kWh)</div>
+          <input type="range" class="pl-range" id="caas-sliderChargingPrice" min="0.25" max="0.75" step="0.01" value="0.50">
+          <div class="pl-slider-range"><span>$0.25</span><span>$0.75</span></div>
+        </div>
+        <div class="pl-slider-group">
+          <div class="pl-slider-header"><span class="pl-slider-label">Electricity Cost</span><span class="pl-slider-value" id="caas-valElecPrice">$0.15</span></div>
+          <div class="pl-slider-desc">Your utility cost ($/kWh)</div>
+          <input type="range" class="pl-range" id="caas-sliderElecPrice" min="0.05" max="0.30" step="0.01" value="0.15">
+          <div class="pl-slider-range"><span>$0.05</span><span>$0.30</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="pl-metrics-grid">
+      <div class="pl-metric-card featured"><div class="pl-metric-label">10-Year Net Profit</div><div class="pl-metric-value" id="caas-m-profit">--</div><div class="pl-metric-sub">After electricity + CaaS fees</div></div>
+      <div class="pl-metric-card"><div class="pl-metric-label">10-Year Revenue</div><div class="pl-metric-value" id="caas-m-revenue">--</div><div class="pl-metric-sub">Gross charging revenue</div></div>
+      <div class="pl-metric-card"><div class="pl-metric-label">10-Year Electricity</div><div class="pl-metric-value" id="caas-m-energy">--</div><div class="pl-metric-sub">Total energy cost</div></div>
+      <div class="pl-metric-card"><div class="pl-metric-label">10-Year CaaS Fees</div><div class="pl-metric-value" id="caas-m-caas">--</div><div class="pl-metric-sub">Total subscription cost</div></div>
+    </div>
+
+    <!-- P&L Table -->
+    <div class="pl-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+        <div class="pl-card-title" style="margin-bottom:0;">Annual P&amp;L Summary</div>
+      </div>
+      <div class="pl-table-wrap">
+        <table class="pl-table" id="caas-plTable">
+          <thead><tr id="caas-plTableHead"></tr></thead>
+          <tbody id="caas-plTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Cash flow chart -->
+    <div class="pl-card">
+      <div class="pl-card-title">Cumulative Net Profit</div>
+      <canvas id="caas-cashflowChart" style="max-height:320px;"></canvas>
+    </div>
+
+    <div class="pl-disclaimer">
+      This model is for illustrative purposes only. CaaS fee is fixed per your quote. Revenue and costs will vary based on actual utilization and utility rates.
     </div>
   `;
 }
