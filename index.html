@@ -6,6 +6,10 @@
 <title>Electric Era — Configure Your Charging Project</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* Haffer — self-hosted. Place font files in a /fonts/ folder next to this file.
    Required files (from the Haffer WEB folder):
@@ -246,44 +250,75 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
   .q-head{flex-direction:column}
   .q-meta{text-align:left}
 }
-
-/* CaaS / Multi-site address styles */
-.addr-wrap{position:relative;width:100%}
-.addr-suggestions{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--s2);border:1px solid var(--gold-border);border-radius:var(--r);z-index:200;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.4)}
-.addr-suggestions:empty{display:none}
-.addr-suggestion{padding:10px 14px;font-size:0.9rem;color:var(--text);cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s}
-.addr-suggestion:last-child{border-bottom:none}
-.addr-suggestion:hover,.addr-suggestion.active{background:var(--s3)}
-.addr-suggestion em{color:var(--gold);font-style:normal}
-.addr-loading{padding:10px 14px;font-size:0.82rem;color:var(--muted);font-family:var(--mono);letter-spacing:.04em}
-.addr-none{padding:10px 14px;font-size:0.82rem;color:#ff7070}
-.site-tag{display:inline-flex;align-items:center;gap:6px;background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:4px 10px 4px 8px;font-size:0.85rem;color:var(--text);margin:3px 3px 3px 0}
-.site-tag button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0;line-height:1;transition:color .15s}
-.site-tag button:hover{color:var(--gold)}
-.site-tag-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 5px rgba(74,222,128,0.5)}
-.site-tags-wrap{display:flex;flex-wrap:wrap;margin-top:10px;min-height:20px}
-.upload-zone{border:1px dashed var(--border);border-radius:var(--r);padding:14px 18px;cursor:pointer;transition:all .17s;text-align:center;font-size:0.88rem;color:var(--muted)}
-.upload-zone:hover{border-color:var(--gold-border);color:var(--text)}
-.upload-zone input{display:none}
-.add-spinner{display:inline-block;width:11px;height:11px;border:1.5px solid rgba(255,255,255,0.2);border-top-color:var(--text);border-radius:50%;animation:addrSpin .6s linear infinite;vertical-align:middle}
-@keyframes addrSpin{to{transform:rotate(360deg)}}
-.metric-card{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
-.metric-label{font-size:0.68rem;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-.metric-val{font-size:1.15rem;font-weight:400;color:var(--text);font-family:var(--mono)}
-.metric-sub{font-size:0.73rem;color:var(--muted);margin-top:2px}
-.data-table{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;font-family:var(--mono);font-size:0.84rem}
-.dt-head{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--muted);font-size:0.68rem;letter-spacing:.06em;text-transform:uppercase;display:grid}
-.dt-row{padding:7px 14px;border-bottom:1px solid var(--border);color:var(--text);display:grid}
-.dt-row:last-child{border-bottom:none}
-.dt-total{padding:9px 14px;border-top:1px solid var(--gold-border);color:var(--gold);display:grid}
-.port-cols{grid-template-columns:2fr 1fr 1fr 1fr 80px}
-.inc-list{display:flex;flex-direction:column;gap:5px}
-.inc-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--s2);border:1px solid var(--border);border-radius:var(--r)}
-.inc-ck{color:var(--gold);flex-shrink:0;margin-top:1px}
-.inc-title{font-size:0.95rem;color:var(--text)}
-.inc-sub{font-size:0.78rem;color:var(--muted);margin-top:2px}
-@media(max-width:820px){.port-cols{grid-template-columns:2fr 1fr 1fr}.port-cols .hide-sm{display:none}}
 </style>
+
+/* ═══════════════════════════════════════════════════
+   P&L TOOL STYLES (scoped to #pl-page)
+   ═══════════════════════════════════════════════════ */
+#pl-page{display:none;min-height:100vh;overflow-y:auto;background:var(--bg)}
+#pl-page.on{display:block}
+#pl-page .pl-container{max-width:1100px;margin:0 auto;padding:0 2rem 4rem}
+#pl-page .pl-hero{text-align:center;padding:3rem 2rem 1.5rem;max-width:760px;margin:0 auto}
+#pl-page .pl-hero h2{font-size:clamp(1.5rem,3vw,2.2rem);font-weight:400;letter-spacing:-.025em;margin-bottom:.5rem}
+#pl-page .pl-hero p{color:var(--muted);font-size:.95rem}
+#pl-page .pl-card{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:1.75rem;margin-bottom:1.5rem}
+#pl-page .pl-card-title{font-size:1.05rem;font-weight:500;margin-bottom:.35rem}
+#pl-page .pl-card-sub{font-size:.82rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.4}
+#pl-page .pl-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem}
+#pl-page .pl-stat-card{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem 1.5rem}
+#pl-page .pl-stat-label{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem}
+#pl-page .pl-stat-value{font-size:2rem;font-weight:400;letter-spacing:-.03em;font-family:var(--mono)}
+#pl-page .pl-stat-value.gold{color:var(--gold)}
+#pl-page .pl-stat-sub{font-size:.75rem;color:var(--muted);margin-top:.2rem}
+#pl-page .pl-metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem}
+#pl-page .pl-metric-card{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem 1.5rem}
+#pl-page .pl-metric-card.featured{border-color:var(--gold-border);background:rgba(248,185,24,.05)}
+#pl-page .pl-metric-label{font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem}
+#pl-page .pl-metric-value{font-size:1.55rem;font-weight:400;font-family:var(--mono);letter-spacing:-.03em;color:var(--text)}
+#pl-page .pl-metric-value.gold{color:var(--gold)}
+#pl-page .pl-metric-sub{font-size:.75rem;color:var(--muted);margin-top:.2rem}
+#pl-page .pl-slider-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+#pl-page .pl-slider-group{display:flex;flex-direction:column;gap:.35rem}
+#pl-page .pl-slider-header{display:flex;justify-content:space-between;align-items:baseline}
+#pl-page .pl-slider-label{font-size:.85rem;font-weight:500}
+#pl-page .pl-slider-value{font-size:.92rem;font-weight:600;color:var(--gold);font-family:var(--mono)}
+#pl-page .pl-slider-desc{font-size:.76rem;color:var(--muted);line-height:1.4}
+#pl-page .pl-slider-range{display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted);margin-top:.15rem}
+#pl-page .pl-range{-webkit-appearance:none;width:100%;height:3px;background:var(--s3);border-radius:99px;outline:none;cursor:pointer;margin:6px 0}
+#pl-page .pl-range::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--gold);cursor:pointer;box-shadow:0 0 8px rgba(248,185,24,.4);transition:transform .14s}
+#pl-page .pl-range::-webkit-slider-thumb:hover{transform:scale(1.2)}
+#pl-page .pl-range::-moz-range-thumb{width:18px;height:18px;border:none;border-radius:50%;background:var(--gold);cursor:pointer}
+#pl-page .pl-table-wrap{overflow-x:auto}
+#pl-page .pl-table{width:100%;border-collapse:collapse;font-size:.82rem;font-family:var(--mono)}
+#pl-page .pl-table th{padding:.6rem .75rem;text-align:right;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;font-weight:500}
+#pl-page .pl-table th:first-child{text-align:left}
+#pl-page .pl-table th.total-col{color:var(--gold);border-left:1px solid var(--border)}
+#pl-page .pl-table td{padding:.5rem .75rem;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);color:var(--dim);white-space:nowrap}
+#pl-page .pl-table td:first-child{text-align:left;color:var(--text);padding-left:.5rem}
+#pl-page .pl-table td.total-col{color:var(--text);border-left:1px solid var(--border);font-weight:600}
+#pl-page .pl-table tr.section-header td{padding-top:1rem;padding-bottom:.2rem;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;border-bottom:none}
+#pl-page .pl-table tr.section-header td:first-child{color:var(--muted)}
+#pl-page .pl-table tr.subtotal td{border-top:1px solid var(--border);color:var(--text);font-weight:600}
+#pl-page .pl-table tr.grand-total td{border-top:2px solid var(--gold-border);color:var(--gold);font-weight:700;font-size:.88rem}
+#pl-page .pl-table .neg{color:#F87171}
+#pl-page .pl-table .pos{color:#22C55E}
+#pl-page .pl-section-note{font-size:.7rem;font-weight:400;color:var(--muted);margin-left:6px}
+#pl-page .pl-site-selector{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.5rem;align-items:center}
+#pl-page .pl-site-btn{background:var(--s2);border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:.78rem;color:var(--muted);cursor:pointer;font-family:var(--mono);transition:all .17s;white-space:nowrap}
+#pl-page .pl-site-btn.active{border-color:var(--gold);color:var(--gold);background:rgba(248,185,24,.08)}
+#pl-page .pl-whats-next{background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:1.75rem;margin-bottom:1.5rem}
+#pl-page .pl-whats-next h3{font-size:1.05rem;font-weight:500;margin-bottom:.75rem}
+#pl-page .pl-whats-next p{color:var(--muted);margin-bottom:.75rem;font-size:.88rem}
+#pl-page .pl-wn-list{list-style:none;display:flex;flex-direction:column;gap:.6rem}
+#pl-page .pl-wn-list li{display:flex;gap:.75rem;font-size:.86rem;color:var(--muted)}
+#pl-page .pl-wn-bullet{color:var(--gold);font-weight:700;flex-shrink:0}
+#pl-page .pl-btn-export{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:var(--r);padding:6px 14px;font-size:.78rem;cursor:pointer;font-family:var(--font);transition:all .17s}
+#pl-page .pl-btn-export:hover{border-color:var(--gold-border);color:var(--text)}
+#pl-page .pl-battery-row{display:none;grid-column:1/-1}
+#pl-page .pl-battery-inner{display:flex;align-items:center;gap:12px;background:rgba(248,185,24,.07);border:1px solid var(--gold-border);border-radius:var(--r);padding:12px 16px}
+#pl-page .pl-disclaimer{padding:1rem 0;font-size:.75rem;color:var(--muted);text-align:center}
+@media(max-width:700px){#pl-page .pl-slider-grid{grid-template-columns:1fr}#pl-page .pl-metrics-grid{grid-template-columns:repeat(2,1fr)}}
+
 </head>
 <body>
 
@@ -330,516 +365,14 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
   <div class="q-wrap" id="q-wrap"></div>
 </div>
 
+<div id="pl-page">
+  <div class="pl-container" id="pl-wrap">
+    <!-- dynamically rendered by showPLPage() -->
+  </div>
+</div>
+
+
 <script>
-
-// ══════════════════════════════════════════════════════════════
-// ── CaaS MODELER ENGINE ───────────────────────────────────────
-// Injected from CaaS configurator. Only runs when S.budget==='financed'.
-// ══════════════════════════════════════════════════════════════
-
-// ── HEX LOOKUP ───────────────────────────────────────────────
-let HEX_LOOKUP = null;
-async function loadHexLookup() {
-  const url = 'https://raw.githubusercontent.com/jordanmcon/ev-project-intake/caas/hexagon_lookup.json';
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const raw = await res.json();
-    if (raw.hexagons && Array.isArray(raw.hexagons)) {
-      HEX_LOOKUP = {};
-      for (const entry of raw.hexagons) HEX_LOOKUP[entry.hex_id] = entry.daily_sessions;
-    } else {
-      HEX_LOOKUP = raw;
-    }
-  } catch(e) {
-    console.error('Failed to load hexagon lookup:', e);
-    HEX_LOOKUP = {};
-  }
-}
-
-async function lookupSPD(address) {
-  if (!HEX_LOOKUP) return { spd: null, hexId: null, status: 'error' };
-  try {
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address);
-    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-    const data = await res.json();
-    if (!data || !data.length) return { spd: null, hexId: null, status: 'error' };
-    const lat = parseFloat(data[0].lat);
-    const lng = parseFloat(data[0].lon);
-    const hexId = h3.latLngToCell(lat, lng, 6);
-    const spd = HEX_LOOKUP[hexId] ?? null;
-    return { spd, hexId, status: spd !== null ? 'found' : 'no_data' };
-  } catch(e) {
-    return { spd: null, hexId: null, status: 'error' };
-  }
-}
-
-async function lookupAllSites(sites) {
-  const results = [];
-  for (const addr of sites) {
-    const r = await lookupSPD(addr);
-    results.push({ address: addr, ...r });
-    await new Promise(resolve => setTimeout(resolve, 200));
-  }
-  return results;
-}
-
-// ── FEE TABLE ─────────────────────────────────────────────────
-const TABLE_FEES = {
-  re400: {
-    4: { noLcfs: 187000, lcfs: 117000 },
-    6: { noLcfs: 258000, lcfs: 154000 },
-    8: { noLcfs: 329000, lcfs: 191000 },
-  },
-  base: {
-    4: { noLcfs: 116000, lcfs:  76000 },
-    6: { noLcfs: 160000, lcfs: 101000 },
-    8: { noLcfs: 197000, lcfs: 118000 },
-  },
-};
-const TABLE_STALLS = [4, 6, 8];
-const LCFS_STATES_CAAS = ['CA', 'OR', 'WA', 'CALIFORNIA', 'OREGON', 'WASHINGTON'];
-const LCFS_RATE_CAAS   = 0.12;
-
-function isLCFSEligibleCaaS(address) {
-  const upper = address.toUpperCase();
-  return LCFS_STATES_CAAS.some(s => new RegExp('\\b' + s + '\\b').test(upper));
-}
-
-function lookupFee(product, stalls, lcfsEligible) {
-  const capped   = stalls > 8;
-  const snapKey  = capped ? 8 : (TABLE_STALLS.includes(stalls) ? stalls : 8);
-  const row      = TABLE_FEES[product][snapKey];
-  const annual   = lcfsEligible ? row.lcfs : row.noLcfs;
-  return { annual, monthly: annual / 12, total10: annual * 10, lcfs: lcfsEligible, capped, snapStalls: snapKey };
-}
-
-function fmtFee(n, capped) { return fmtCaaS(n) + (capped ? '+' : ''); }
-function fmtCaaS(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
-
-function lcfsCreditYear1CaaS(spd) { return LCFS_RATE_CAAS * 35 * spd * 365; }
-
-// ── ADDRESS AUTOCOMPLETE (US-only, Nominatim) ─────────────────
-const NOMINATIM = 'https://nominatim.openstreetmap.org';
-let _acTimer = null, _acActive = -1, _acResults = [], _acAbort = null;
-
-function nominatimUrl(endpoint, params) {
-  return `${NOMINATIM}/${endpoint}?format=json&countrycodes=us&accept-language=en&` +
-    Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-}
-
-function buildAddrLabel(result) {
-  const a = result.address || {};
-  const parts = [
-    a.house_number && a.road ? `${a.house_number} ${a.road}` : (a.road || null),
-    a.city || a.town || a.village || a.municipality || null,
-    a.state || null,
-    a.postcode || null,
-  ].filter(Boolean);
-  return parts.length >= 2 ? parts.join(', ') : result.display_name;
-}
-
-function closeSuggestions() {
-  const box = document.getElementById('addr-suggestions');
-  if (box) box.innerHTML = '';
-  _acActive = -1; _acResults = [];
-}
-
-function renderAddrSuggestions(items, query) {
-  const box = document.getElementById('addr-suggestions');
-  if (!box) return;
-  _acResults = items; _acActive = -1;
-  if (!items.length) {
-    box.innerHTML = '<div class="addr-none">No US addresses found — try adding city and state</div>';
-    return;
-  }
-  const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(${esc})`, 'gi');
-  box.innerHTML = items.map((item, i) =>
-    `<div class="addr-suggestion" data-i="${i}" onmousedown="pickAddrSuggestion(${i})">${item.label.replace(re, '<em>$1</em>')}</div>`
-  ).join('');
-}
-
-function pickAddrSuggestion(i) {
-  const item = _acResults[i];
-  if (!item) return;
-  closeSuggestions();
-  if (!S.sites.includes(item.label)) { S.sites.push(item.label); renderCaaSSiteTags(); }
-  const inp = document.getElementById('siteInput');
-  if (inp) inp.value = '';
-  const ev = document.getElementById('e-caas-verify');
-  if (ev) ev.style.display = 'none';
-}
-
-async function fetchAddrSuggestions(query) {
-  if (_acAbort) _acAbort.abort();
-  _acAbort = new AbortController();
-  const box = document.getElementById('addr-suggestions');
-  if (box) box.innerHTML = '<div class="addr-loading">Searching…</div>';
-  try {
-    const url = nominatimUrl('search', { q: query, limit: 5, addressdetails: 1 });
-    const res = await fetch(url, { signal: _acAbort.signal, headers: { 'Accept-Language': 'en' } });
-    const data = await res.json();
-    const us = (data || []).filter(r => (r.address || {}).country_code === 'us');
-    renderAddrSuggestions(us.map(r => ({ label: buildAddrLabel(r), raw: r })), query);
-  } catch(e) { if (e.name !== 'AbortError' && box) box.innerHTML = ''; }
-}
-
-function onSiteInput(e) {
-  const val = e.target.value.trim();
-  clearTimeout(_acTimer);
-  if (val.length < 4) { closeSuggestions(); return; }
-  _acTimer = setTimeout(() => fetchAddrSuggestions(val), 350);
-}
-
-function onSiteKeydown(e) {
-  const box = document.getElementById('addr-suggestions');
-  const items = box ? box.querySelectorAll('.addr-suggestion') : [];
-  if (e.key === 'ArrowDown') { e.preventDefault(); _acActive = Math.min(_acActive+1, items.length-1); items.forEach((el,i)=>el.classList.toggle('active',i===_acActive)); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); _acActive = Math.max(_acActive-1,-1); items.forEach((el,i)=>el.classList.toggle('active',i===_acActive)); }
-  else if (e.key === 'Enter') { e.preventDefault(); if (_acActive >= 0 && _acResults[_acActive]) pickAddrSuggestion(_acActive); else addSiteFromInput(); }
-  else if (e.key === 'Escape') closeSuggestions();
-}
-
-async function verifySingleAddress(raw) {
-  try {
-    const url = nominatimUrl('search', { q: raw, limit: 1, addressdetails: 1 });
-    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-    const data = await res.json();
-    if (!data || !data.length) return null;
-    const r = data[0];
-    if ((r.address || {}).country_code !== 'us') return null;
-    return buildAddrLabel(r);
-  } catch(e) { return null; }
-}
-
-function renderCaaSSiteTags() {
-  const wrap = document.getElementById('site-tags');
-  if (!wrap) return;
-  wrap.innerHTML = S.sites.map((s, i) => `
-    <span class="site-tag"><span class="site-tag-dot"></span>${s}
-      <button onmousedown="removeCaaSSite(${i})" title="Remove">✕</button>
-    </span>`).join('');
-  const counter = document.getElementById('site-count');
-  if (counter) counter.textContent = S.sites.length ? `${S.sites.length} site${S.sites.length>1?'s':''}` : '';
-}
-
-function removeCaaSSite(i) { S.sites.splice(i,1); renderCaaSSiteTags(); }
-
-async function addSiteFromInput() {
-  const inp = document.getElementById('siteInput');
-  if (!inp) return;
-  const val = inp.value.trim();
-  if (!val) return;
-  closeSuggestions();
-  if (S.sites.includes(val)) { inp.value = ''; return; }
-  const btn = document.getElementById('caas-add-btn');
-  if (btn) { btn.disabled=true; btn.innerHTML='<span class="add-spinner"></span> Verifying…'; }
-  const resolved = await verifySingleAddress(val);
-  if (btn) { btn.disabled=false; btn.innerHTML='+ Add'; }
-  if (resolved) {
-    if (!S.sites.includes(resolved)) S.sites.push(resolved);
-    inp.value = '';
-    const ev = document.getElementById('e-caas-verify');
-    if (ev) ev.style.display = 'none';
-  } else {
-    const ev = document.getElementById('e-caas-verify');
-    if (ev) { ev.textContent = `Could not verify "${val}" as a US address.`; ev.style.display = 'block'; }
-  }
-  renderCaaSSiteTags();
-}
-
-function handleCaaSSiteCSV(file) {
-  const reader = new FileReader();
-  reader.onload = async e => {
-    const lines = e.target.result.split('\n').map(l => l.replace(/^["']|["']$/g,'').trim()).filter(Boolean);
-    const start = /address|site|location/i.test(lines[0]) ? 1 : 0;
-    const toAdd = lines.slice(start).filter(l => !S.sites.includes(l));
-    if (!toAdd.length) return;
-    const btn = document.getElementById('caas-add-btn');
-    if (btn) { btn.disabled=true; btn.innerHTML='<span class="add-spinner"></span> Verifying…'; }
-    const failed = [];
-    for (const line of toAdd) {
-      const resolved = await verifySingleAddress(line);
-      if (resolved) { if (!S.sites.includes(resolved)) S.sites.push(resolved); }
-      else failed.push(line);
-      await new Promise(r => setTimeout(r, 200));
-    }
-    if (btn) { btn.disabled=false; btn.innerHTML='+ Add'; }
-    if (failed.length) {
-      const ev = document.getElementById('e-caas-verify');
-      if (ev) { ev.textContent=`Could not verify ${failed.length} address${failed.length>1?'es':''} from CSV.`; ev.style.display='block'; }
-    }
-    renderCaaSSiteTags();
-  };
-  reader.readAsText(file);
-}
-
-// ── MULTI-SITE INPUT (Direct Purchase path) ───────────────────
-// Same autocomplete UI reused for the direct-purchase slide
-function renderDirectSiteTags() {
-  const wrap = document.getElementById('direct-site-tags');
-  if (!wrap) return;
-  wrap.innerHTML = S.sites.map((s,i) => `
-    <span class="site-tag"><span class="site-tag-dot"></span>${s}
-      <button onmousedown="removeDirectSite(${i})" title="Remove">✕</button>
-    </span>`).join('');
-  const counter = document.getElementById('direct-site-count');
-  if (counter) counter.textContent = S.sites.length ? `${S.sites.length} site${S.sites.length>1?'s':''}` : '';
-}
-
-function removeDirectSite(i) { S.sites.splice(i,1); renderDirectSiteTags(); }
-
-async function addDirectSiteFromInput() {
-  const inp = document.getElementById('directSiteInput');
-  if (!inp) return;
-  const val = inp.value.trim();
-  if (!val) return;
-  closeSuggestions();
-  if (S.sites.includes(val)) { inp.value = ''; return; }
-  const btn = document.getElementById('direct-add-btn');
-  if (btn) { btn.disabled=true; btn.innerHTML='<span class="add-spinner"></span> Verifying…'; }
-  const resolved = await verifySingleAddress(val);
-  if (btn) { btn.disabled=false; btn.innerHTML='+ Add'; }
-  if (resolved) {
-    if (!S.sites.includes(resolved)) S.sites.push(resolved);
-    inp.value = '';
-    const ev = document.getElementById('e-direct-verify');
-    if (ev) ev.style.display = 'none';
-    // Keep S.siteAddress as the first site for HubSpot
-    if (S.sites.length === 1) S.siteAddress = resolved;
-  } else {
-    const ev = document.getElementById('e-direct-verify');
-    if (ev) { ev.textContent = `Could not verify "${val}" as a US address.`; ev.style.display = 'block'; }
-  }
-  renderDirectSiteTags();
-}
-
-function onDirectSiteInput(e) {
-  const val = e.target.value.trim();
-  clearTimeout(_acTimer);
-  if (val.length < 4) { closeSuggestions(); return; }
-  // Reuse the same suggestions dropdown, just with a different target element id
-  _acTimer = setTimeout(() => fetchAddrSuggestionsFor(val, 'direct-addr-suggestions', 'addDirectSiteFromInput'), 350);
-}
-
-function onDirectSiteKeydown(e) {
-  const box = document.getElementById('direct-addr-suggestions');
-  const items = box ? box.querySelectorAll('.addr-suggestion') : [];
-  if (e.key === 'ArrowDown') { e.preventDefault(); _acActive = Math.min(_acActive+1,items.length-1); items.forEach((el,i)=>el.classList.toggle('active',i===_acActive)); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); _acActive = Math.max(_acActive-1,-1); items.forEach((el,i)=>el.classList.toggle('active',i===_acActive)); }
-  else if (e.key === 'Enter') { e.preventDefault(); if (_acActive >= 0 && _acResults[_acActive]) pickDirectAddrSuggestion(_acActive); else addDirectSiteFromInput(); }
-  else if (e.key === 'Escape') closeSuggestions();
-}
-
-async function fetchAddrSuggestionsFor(query, boxId, fallbackFn) {
-  if (_acAbort) _acAbort.abort();
-  _acAbort = new AbortController();
-  const box = document.getElementById(boxId);
-  if (box) box.innerHTML = '<div class="addr-loading">Searching…</div>';
-  try {
-    const url = nominatimUrl('search', { q: query, limit: 5, addressdetails: 1 });
-    const res = await fetch(url, { signal: _acAbort.signal, headers: { 'Accept-Language': 'en' } });
-    const data = await res.json();
-    const us = (data || []).filter(r => (r.address || {}).country_code === 'us');
-    _acResults = us.map(r => ({ label: buildAddrLabel(r), raw: r }));
-    _acActive = -1;
-    if (!_acResults.length) { if (box) box.innerHTML = '<div class="addr-none">No US addresses found — try adding city and state</div>'; return; }
-    const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(${esc})`, 'gi');
-    if (box) box.innerHTML = _acResults.map((item,i) =>
-      `<div class="addr-suggestion" data-i="${i}" onmousedown="pickDirectAddrSuggestion(${i})">${item.label.replace(re,'<em>$1</em>')}</div>`
-    ).join('');
-  } catch(e) { if (e.name !== 'AbortError' && box) box.innerHTML = ''; }
-}
-
-function pickDirectAddrSuggestion(i) {
-  const item = _acResults[i];
-  if (!item) return;
-  const box = document.getElementById('direct-addr-suggestions');
-  if (box) box.innerHTML = '';
-  _acActive = -1; _acResults = [];
-  if (!S.sites.includes(item.label)) {
-    S.sites.push(item.label);
-    if (S.sites.length === 1) S.siteAddress = item.label;
-    renderDirectSiteTags();
-  }
-  const inp = document.getElementById('directSiteInput');
-  if (inp) inp.value = '';
-  const ev = document.getElementById('e-direct-verify');
-  if (ev) ev.style.display = 'none';
-}
-
-function handleDirectSiteCSV(file) {
-  const reader = new FileReader();
-  reader.onload = async e => {
-    const lines = e.target.result.split('\n').map(l => l.replace(/^["']|["']$/g,'').trim()).filter(Boolean);
-    const start = /address|site|location/i.test(lines[0]) ? 1 : 0;
-    const toAdd = lines.slice(start).filter(l => !S.sites.includes(l));
-    if (!toAdd.length) return;
-    const btn = document.getElementById('direct-add-btn');
-    if (btn) { btn.disabled=true; btn.innerHTML='<span class="add-spinner"></span> Verifying…'; }
-    const failed = [];
-    for (const line of toAdd) {
-      const resolved = await verifySingleAddress(line);
-      if (resolved) { if (!S.sites.includes(resolved)) S.sites.push(resolved); }
-      else failed.push(line);
-      await new Promise(r => setTimeout(r, 200));
-    }
-    if (!S.siteAddress && S.sites.length) S.siteAddress = S.sites[0];
-    if (btn) { btn.disabled=false; btn.innerHTML='+ Add'; }
-    if (failed.length) {
-      const ev = document.getElementById('e-direct-verify');
-      if (ev) { ev.textContent=`Could not verify ${failed.length} address${failed.length>1?'es':''} from CSV.`; ev.style.display='block'; }
-    }
-    renderDirectSiteTags();
-  };
-  reader.readAsText(file);
-}
-
-// ── CaaS QUOTE RENDERER ───────────────────────────────────────
-async function renderCaaSQuote(qWrap) {
-  qWrap.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:18px;">
-      <div style="width:38px;height:38px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;"></div>
-      <div style="font-family:var(--mono);font-size:0.85rem;color:var(--muted);">Looking up utilization data for your site${S.sites.length>1?'s':''}…</div>
-    </div>
-    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
-
-  const siteData = await lookupAllSites(S.sites);
-  const siteResults = siteData.map(sd => {
-    const eligible = isLCFSEligibleCaaS(sd.address);
-    const spd1     = (eligible && sd.status === 'found') ? sd.spd : 0;
-    const fee      = lookupFee(S.caasProduct, S.stalls, eligible);
-    return { ...sd, fee, lcfs: eligible, lcfsCredit1: lcfsCreditYear1CaaS(spd1) };
-  });
-
-  const n           = S.sites.length;
-  const isPortfolio = n > 1;
-  const portMonthly = siteResults.reduce((a,s)=>a+s.fee.monthly,0);
-  const portAnnual  = siteResults.reduce((a,s)=>a+s.fee.annual, 0);
-  const port10yr    = siteResults.reduce((a,s)=>a+s.fee.total10,0);
-  const anyCapped   = siteResults.some(s=>s.fee.capped);
-  const productMeta = {base:{label:'Base Station',kw:200},re400:{label:'RE400',kw:400}}[S.caasProduct]||{label:'—',kw:'—'};
-  const LCFS_BADGE  = `<span style="font-size:0.62rem;font-family:var(--mono);background:rgba(248,185,24,.10);border:1px solid var(--gold-border);border-radius:3px;padding:1px 5px;color:var(--gold);margin-left:6px;vertical-align:middle;letter-spacing:.04em;">LCFS</span>`;
-
-  const siteRows = isPortfolio ? siteResults.map(sd => {
-    const spdCell = sd.status==='found'
-      ? `<span style="color:var(--gold);">${sd.spd.toFixed(1)}</span>`
-      : `<span style="color:var(--muted);font-size:0.76rem;">No data</span>`;
-    return `<div class="dt-row port-cols">
-      <span style="color:var(--dim);font-size:0.82rem;">${sd.address}${sd.lcfs?LCFS_BADGE:''}</span>
-      <span>${fmtFee(sd.fee.monthly,sd.fee.capped)}</span>
-      <span>${fmtFee(sd.fee.annual,sd.fee.capped)}</span>
-      <span class="hide-sm">${fmtFee(sd.fee.total10,sd.fee.capped)}</span>
-      <span class="hide-sm">${spdCell}</span>
-    </div>`;
-  }).join('') : '';
-
-  const quoteLogoSvg = document.querySelector('.q-logo') ? document.querySelector('.q-logo').innerHTML : '';
-
-  qWrap.innerHTML = `
-    <div class="q-head">
-      <div>
-        <div class="q-logo">${quoteLogoSvg}</div>
-        <div style="margin-top:16px;">
-          <div class="q-title">Charging as a Service Quote</div>
-          <div class="q-subtitle">Prepared for ${S.firstName} ${S.lastName}</div>
-        </div>
-      </div>
-      <div class="q-meta">
-        <div class="q-id">Quote #${S.quoteId}</div>
-        <div class="q-date">${S.quoteDate}</div>
-        <div class="q-badge">INDICATIVE · 10-YEAR TERM</div>
-        <div style="margin-top:14px;">
-          <button class="btn btn-ghost btn-sm" onclick="savePdf()" style="padding:8px 16px;font-size:0.88rem;">Save as PDF</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Project Overview</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
-      <div class="q-info-grid">
-        <div class="q-info-card"><div class="qi-label">Contact</div><div class="qi-val">${S.firstName} ${S.lastName}</div></div>
-        <div class="q-info-card"><div class="qi-label">Email</div><div class="qi-val">${S.email}</div></div>
-        <div class="q-info-card"><div class="qi-label">Business Type</div><div class="qi-val">${{'business-owner':'Business Owner',cpo:'Charge Point Operator',distributor:'Distributor',vendor:'Vendor',other:'Other'}[S.businessType]||'—'}</div></div>
-        <div class="q-info-card"><div class="qi-label">Budget Approach</div><div class="qi-val">Charging as a Service (CaaS)</div></div>
-        <div class="q-info-card"><div class="qi-label">Site${n>1?'s':''}</div><div class="qi-val">${S.sites.join(' · ')}</div></div>
-        <div class="q-info-card"><div class="qi-label">Target Completion</div><div class="qi-val">${S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—'}</div></div>
-      </div>
-    </div>
-
-    <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">${isPortfolio?'Portfolio CaaS Fee':'Monthly CaaS Fee'}</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit sites/stalls ↗</button></div>
-      <div style="background:var(--s2);border:1px solid var(--gold-border);border-radius:var(--r);padding:30px 30px 26px;position:relative;overflow:hidden;margin-bottom:10px;">
-        <div style="position:absolute;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 120%,rgba(248,185,24,.09) 0%,transparent 70%);pointer-events:none;"></div>
-        <div style="font-size:0.72rem;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:12px;">${isPortfolio?'Total portfolio monthly fee':'Monthly subscription fee'}</div>
-        <div style="font-size:62px;font-weight:400;color:var(--gold);font-family:var(--mono);letter-spacing:-.04em;line-height:1;">${fmtFee(portMonthly,anyCapped)}</div>
-        <div style="font-size:0.95rem;color:var(--dim);margin-top:6px;">per month · fixed for 10-year term${isPortfolio?' · '+n+' sites':''}${anyCapped?' · indicative minimum':''}</div>
-        <div style="font-size:0.78rem;font-family:var(--mono);color:var(--muted);margin-top:5px;">${fmtFee(portAnnual,anyCapped)}/yr · ${fmtFee(port10yr,anyCapped)} over full term</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr${isPortfolio?' 1fr':''};gap:8px;margin-bottom:10px;">
-        ${isPortfolio?`<div class="metric-card"><div class="metric-label">Per-site monthly</div><div class="metric-val">${fmtFee(siteResults[0].fee.monthly,siteResults[0].fee.capped)}</div><div class="metric-sub">${fmtFee(siteResults[0].fee.annual,siteResults[0].fee.capped)}/yr per site</div></div>`:''}
-        <div class="metric-card"><div class="metric-label">${isPortfolio?'Portfolio annual fee':'Annual fee'}</div><div class="metric-val">${fmtFee(portAnnual,anyCapped)}</div><div class="metric-sub">${fmtFee(port10yr,anyCapped)} over 10 years</div></div>
-        <div class="metric-card"><div class="metric-label">Contract term</div><div class="metric-val">10 years</div><div class="metric-sub">Fixed monthly fee, no CapEx</div></div>
-      </div>
-    </div>
-
-    ${isPortfolio?`
-    <div class="q-sec">
-      <div class="q-sec-title">Fee by site</div>
-      <div class="data-table">
-        <div class="dt-head port-cols"><span>Site address</span><span>Monthly</span><span>Annual</span><span class="hide-sm">10-Yr total</span><span class="hide-sm">Est. SPD</span></div>
-        ${siteRows}
-        <div class="dt-total port-cols"><span>Portfolio total</span><span>${fmtFee(portMonthly,anyCapped)}</span><span>${fmtFee(portAnnual,anyCapped)}</span><span class="hide-sm">${fmtFee(port10yr,anyCapped)}</span><span class="hide-sm"></span></div>
-      </div>
-    </div>`:''}
-
-    <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Station Configuration</div><button class="q-edit-btn" onclick="goBackFromQuote(4)">Edit ↗</button></div>
-      <div class="q-table">
-        <div class="q-row"><div><div class="q-row-name">Product</div></div><div class="q-price">${productMeta.label} (${productMeta.kw} kW/port)</div></div>
-        <div class="q-row"><div><div class="q-row-name">Charging stalls</div></div><div class="q-price">${S.stalls}${anyCapped?'+':''} stalls</div></div>
-        <div class="q-row"><div><div class="q-row-name">Sites</div></div><div class="q-price">${n}</div></div>
-        <div class="q-row"><div><div class="q-row-name">Contract term</div></div><div class="q-price">10 years · fixed fee</div></div>
-      </div>
-    </div>
-
-    <div class="q-sec">
-      <div class="q-sec-title">What's included in CaaS</div>
-      <div class="inc-list">
-        ${[
-          ['Hardware procurement & installation','Charger equipment, electrical, and permitting coordination.'],
-          ['Full-term O&M','Preventative and corrective maintenance for 10 years.'],
-          ['HaloAI on-charger intelligence','Driver support, remote diagnostics, and retail experience features.'],
-          ['Network & connectivity','LTE, OCPP compliance, and 24/7 cloud monitoring included.'],
-          ['No upfront CapEx','Fixed monthly subscription — no capital expenditure required.'],
-        ].map(([t,s])=>`
-          <div class="inc-item"><span class="inc-ck">✓</span>
-          <div><div class="inc-title">${t}</div><div class="inc-sub">${s}</div></div></div>`).join('')}
-      </div>
-    </div>
-
-    <div class="q-note" style="border-color:var(--gold-border);display:flex;gap:12px;align-items:flex-start;">
-      <div><div class="q-note-title">Next Steps</div><div class="q-note-body">
-        <ul style="padding-left:18px;">
-          <li>Check your email inbox for a record of this quote</li>
-          <li>An Electric Era representative will reach out to walk through final pricing and site assessment</li>
-          <li>Fees shown are indicative — final CaaS fee is subject to site review and credit assessment</li>
-        </ul>
-      </div></div>
-    </div>
-
-    <div class="q-actions" style="margin-top:18px;">
-      <button class="btn btn-ghost" onclick="restart()" style="font-size:1rem;color:var(--muted);">Start another project</button>
-    </div>
-    <div class="q-disclaimer">This estimate is indicative and for discussion purposes only. Actual CaaS fees are subject to final site assessment and credit review. © ${new Date().getFullYear()} Electric Era Technologies, Inc.</div>
-  `;
-}
-// ══════════════════════════════════════════════════════════════
-// ── END CaaS MODELER ENGINE ───────────────────────────────────
-// ══════════════════════════════════════════════════════════════
-
 // ── GRANTS CONFIG ─────────────────────────────────────────────
 // ┌─────────────────────────────────────────────────────────────────────────────┐
 // │  GRANT PROGRAMS — edit this object to add, update, or remove grants.        │
@@ -901,11 +434,8 @@ const S = {
   firstName: '', lastName: '', email: '',
   businessType: '',     // 'business-owner'|'cpo'|'distributor'|'vendor'|'other'
   siteAddress: '',
-  sites: [],            // multi-site array (both paths)
   stalls: 4,
   budget: '',           // 'allocated'|'financed'
-  caasProduct: null,    // 'base'|'re400' — CaaS path only
-  caasAnnualFee: 0,     // annual CaaS fee in dollars — set before HubSpot submit
   battery: null,        // 'none'|'125kw'|'250kw'
   retailPrograms: [],   // multi: 'rmn'|'loyalty'|'membership' or ['none']
   addDesign: false, addEPC: false, addConstruction: false, addNone: false,
@@ -1027,28 +557,8 @@ const SLIDES = [
   { step:1, render:()=>`
     <div class="eyebrow">Project Intake</div>
     <h1>Tell us about your <em>project site</em>.</h1>
-    <div class="field">
-      <label>Site address(es) — include city and state</label>
-      <div class="addr-wrap">
-        <input type="text" id="directSiteInput" placeholder="123 Main St, Seattle, WA"
-          autocomplete="off" oninput="onDirectSiteInput(event)" onkeydown="onDirectSiteKeydown(event)"
-          onblur="setTimeout(()=>{const b=document.getElementById('direct-addr-suggestions');if(b)b.innerHTML='';},150)">
-        <div id="direct-addr-suggestions" class="addr-suggestions"></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
-        <button id="direct-add-btn" class="btn btn-ghost" style="padding:7px 14px;font-size:0.82rem;" onmousedown="addDirectSiteFromInput()">+ Add</button>
-        <span style="font-size:0.78rem;color:var(--muted);font-family:var(--mono);">or press Enter · select a suggestion to add instantly</span>
-      </div>
-      <div class="ferr" id="e-direct-verify" style="display:none;"></div>
-      <div class="ferr" id="e-siteAddress" style="display:none;">Please add at least one site address.</div>
-    </div>
-    <div class="upload-zone" onclick="document.getElementById('direct-csv-input').click()" style="margin-bottom:8px;">
-      <input type="file" id="direct-csv-input" accept=".csv,.txt" onchange="if(this.files[0])handleDirectSiteCSV(this.files[0])">
-      <span style="margin-right:6px;">📎</span> Import CSV — one address per row
-    </div>
-    <div id="direct-site-count" style="font-size:0.78rem;font-family:var(--mono);color:var(--gold);min-height:18px;"></div>
-    <div class="site-tags-wrap" id="direct-site-tags"></div>
-    <div class="field" style="margin-bottom:22px;margin-top:20px;">
+    <div class="field"><label>Project site address (include city, state)</label><input type="text" style="border-style:solid;border-color:#F8B918;" id="siteAddress" placeholder="123 Main St, Seattle, WA" value="${S.siteAddress}" oninput="S.siteAddress=this.value"><div class="ferr" id="e-siteAddress">Required</div></div>
+    <div class="field" style="margin-bottom:22px;">
       <label>Estimated # of stalls</label>
       <div class="stall-display" id="stall-num">${S.stalls}</div>
       <input type="range" id="stall-range" min="1" max="32" value="${S.stalls}" oninput="S.stalls=+this.value;document.getElementById('stall-num').textContent=this.value;trackRange(this)">
@@ -1072,86 +582,16 @@ const SLIDES = [
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
-  `, onEnter:()=>{
-      setTimeout(()=>{const r=document.getElementById('stall-range');if(r)trackRange(r);},60);
-      renderDirectSiteTags();
-    },
+  `, onEnter:()=>setTimeout(()=>{const r=document.getElementById('stall-range');if(r)trackRange(r);},60),
     valid:()=>{
       let ok=true;
-      // Block if there's unsubmitted text in the input
-      const inp=document.getElementById('directSiteInput');
-      if(inp&&inp.value.trim()){
-        const ev=document.getElementById('e-direct-verify');
-        if(ev){ev.textContent='Please select an address from the suggestions before continuing.';ev.style.display='block';}
-        ok=false;
-      }
-      // Require at least one verified site
-      const esa=document.getElementById('e-siteAddress');
-      if(!S.sites.length){if(esa)esa.style.display='block';ok=false;}
-      else{if(esa)esa.style.display='none';}
-      // Keep S.siteAddress synced for HubSpot
-      if(S.sites.length&&!S.siteAddress)S.siteAddress=S.sites[0];
+      const sa=document.getElementById('siteAddress'),esa=document.getElementById('e-siteAddress');
+      if(sa&&sa.value.trim()===''){sa.classList.add('inv');if(esa)esa.style.display='block';ok=false;}
+      else if(sa){sa.classList.remove('inv');if(esa)esa.style.display='none';}
       if(!S.budget){document.getElementById('e-budget').style.display='block';ok=false;}
       else document.getElementById('e-budget').style.display='none';
       return ok;
   }},
-
-
-  // ── CaaS PATH: PRODUCT SELECTION (slide 4) ───────────────────
-  // Only reached when S.budget === 'financed'
-  { step:2, isCaaS:true, render:()=>`
-    <div class="eyebrow">CaaS Configuration</div>
-    <h1>Which <em>charging product</em>?</h1>
-    <p class="sub">Your site address and stall count have been carried over. Just select the product you'd like to deploy.</p>
-    <div class="choices" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:10px;">
-      ${[
-        ['base',  'Base Station',   '200 kW / port', 'Electric Era Base Station — 4, 6, or 8 stall configurations.'],
-        ['re400', 'RE400',          '400 kW / port', 'Electric Era RE400 with HaloAI — 4, 6, or 8 stall configurations.'],
-      ].map(([v, label, kw, desc], i) => `
-        <div class="choice ${S.caasProduct===v?'sel':''}" onclick="S.caasProduct='${v}';this.closest('.choices').querySelectorAll('.choice').forEach(el=>el.classList.remove('sel'));this.classList.add('sel');">
-          <div class="ck">${String.fromCharCode(65+i)}</div>
-          <div class="cb">
-            <div class="ct">${label}</div>
-            <div style="font-size:0.8rem;font-family:var(--mono);color:var(--gold);margin:3px 0 4px;">${kw}</div>
-            <div class="cd">${desc}</div>
-          </div>
-        </div>`).join('')}
-    </div>
-    <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;font-size:0.82rem;color:var(--muted);font-family:var(--mono);">
-      <span style="color:var(--gold);">Site${S.sites.length>1?'s':''}: </span>${S.sites.join(' · ')} &nbsp;·&nbsp;
-      <span style="color:var(--gold);">Stalls: </span>${S.stalls}
-    </div>
-    <div class="cta-row">
-      <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <button class="btn btn-ghost" onclick="prev()">Back</button>
-    </div>
-  `, valid:()=>{ if(!S.caasProduct){toast('Please select a product.');return false;} return true; }},
-
-  // ── CaaS PATH: SUMMARY (slide 5) ─────────────────────────────
-  { step:3, isCaaS:true, render:()=>{
-    const productLabel = {base:'Base Station (200 kW/port)',re400:'RE400 (400 kW/port)'}[S.caasProduct]||'—';
-    return `
-    <div class="eyebrow">CaaS — Summary</div>
-    <h1>Here's your <em>CaaS configuration</em>.</h1>
-    <p class="sub">Review your selections before generating your indicative CaaS quote.</p>
-    <div class="sum-grid" style="margin-bottom:18px;">
-      <div class="sum-card"><div class="sum-label">Site${S.sites.length>1?'s':''}</div><div class="sum-val gold" style="font-size:0.9rem;">${S.sites.join('<br>')}</div></div>
-      <div class="sum-card"><div class="sum-label">Stalls</div><div class="sum-val gold">${S.stalls} per site</div></div>
-      <div class="sum-card" style="position:relative;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-          <div><div class="sum-label">Productl</div><div class="sum-val">${productLabel}</div></div>
-          <button onclick="go(4)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
-        </div>
-      </div>
-      <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">Charging as a Service</div></div>
-    </div>
-    <div class="sec-label">Ideal Completion Date</div>
-    <div class="date-grid">${makeDatePills()}</div>
-    <div class="cta-row">
-      <button class="btn btn-primary" onclick="validateAndShowQuote()">Generate My CaaS Quote <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <button class="btn btn-ghost" onclick="prev()">Back</button>
-    </div>`;
-  }, valid:()=>{ if(!S.startDate){toast('Please select a completion date.');return false;} return true; }},
 
   // 4 — BATTERY INTERSTITIAL
   { step:2, render:()=>`
@@ -1327,37 +767,10 @@ const SLIDES = [
 
 // ── NAV ──────────────────────────────────────────────────────
 let cur = 0;
-function next(){
-  const s=SLIDES[cur];
-  if(s.valid&&!s.valid())return;
-  let target=cur+1;
-  // Skip CaaS slides on direct-purchase path
-  if(S.budget==='allocated' && SLIDES[target] && SLIDES[target].isCaaS) {
-    while(target<SLIDES.length && SLIDES[target].isCaaS) target++;
-  }
-  // Skip battery+retail slides on CaaS path
-  if(S.budget==='financed' && SLIDES[target] && !SLIDES[target].isCaaS && SLIDES[target].step>=2 && !SLIDES[target].isCaaS) {
-    // After CaaS summary (step 3 isCaaS), we go straight to quote — handled by validateAndShowQuote
-    // When on slide 3 (budget) going to 4: skip if caas
-  }
-  if(target<SLIDES.length) go(target);
-}
-function prev(){
-  if(cur<=0)return;
-  let target=cur-1;
-  // Skip CaaS slides going back on direct-purchase path
-  if(S.budget==='allocated' && SLIDES[target] && SLIDES[target].isCaaS) {
-    while(target>0 && SLIDES[target].isCaaS) target--;
-  }
-  // Skip battery+retail going back on CaaS path (shouldn't happen but safety)
-  go(target);
-}
+function next(){ const s=SLIDES[cur]; if(s.valid&&!s.valid())return; if(cur<SLIDES.length-1)go(cur+1); }
+function prev(){ if(cur>0)go(cur-1); }
 function validateAndShowQuote(){
   if(!S.startDate){ toast('Please select a completion date.'); return; }
-  if(S.budget==='financed'){
-    showQuote();
-    return;
-  }
   if(!S.addDesign && !S.addEPC && !S.addConstruction && !S.addNone){
     const err=document.getElementById('addon-err');
     if(err){ err.style.display='block'; err.scrollIntoView({behavior:'smooth',block:'center'}); }
@@ -1564,7 +977,7 @@ async function submitToHubSpot() {
     firstname:            S.firstName,
     lastname:             S.lastName,
     business_type:        bizMap[S.businessType] || S.businessType,
-    location_of_interest: (S.sites&&S.sites.length ? S.sites.join('; ') : S.siteAddress) || '',
+    location_of_interest: S.siteAddress,
     number_of_stalls:     String(S.stalls),
     cpq_test_why_install_ev_charging: S.reasons.map(r => reasonMap[r] || r).join(';'),
     cpq_test_budget:                  budgetMap[S.budget] || S.budget,
@@ -1576,7 +989,7 @@ async function submitToHubSpot() {
   // ── Deal properties ───────────────────────────────────────────────────────
   // Pipeline: "CPQ Test" (875089784), Stage: "Identified" (1128525596)
   const dealProperties = {
-    dealname:                    `${S.firstName} ${S.lastName} — ${S.sites&&S.sites.length ? S.sites.join(', ') : S.siteAddress}`,
+    dealname:                    `${S.firstName} ${S.lastName} — ${S.siteAddress}`,
     pipeline:                    '772342789',  // Site Opportunity
     dealstage:                   '1128525596',  // Identified
     amount:                      String(pricing.subtotal),
@@ -1590,13 +1003,8 @@ async function submitToHubSpot() {
     cpq_quote:                       S.quoteId,
     cpq_ideal_completion_date:       calcCompletionDate(),
     cpq_calculated_start_date:       calcProjectStartDate(),
-    cpq_site_address:             (S.sites&&S.sites.length ? S.sites.join('; ') : S.siteAddress) || '',
+    cpq_site_address:             S.siteAddress,
   };
-
-  // ── CaaS fee ──────────────────────────────────────────────────────────────
-  if (S.budget === 'financed' && S.caasAnnualFee) {
-    dealProperties.cpq_caas_fee = S.caasAnnualFee;
-  }
 
   // ── Grant fields ──────────────────────────────────────────────────────────
   if (S.grant && GRANTS[S.grant]) {
@@ -1644,33 +1052,14 @@ async function trackStep(n) {
 async function showQuote(){
   if(!S.startDate){toast('Please select a completion date.');return;}
 
+  // Generate quote ID first so it can be sent to HubSpot
   S.quoteId='EE-'+Date.now().toString(36).toUpperCase().slice(-6);
   S.quoteDate=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
 
+  // Show loading state on the button
   const btn = document.querySelector('[onclick="validateAndShowQuote()"]');
   if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
 
-  // ── CaaS path ────────────────────────────────────────────────
-  if(S.budget==='financed'){
-    // Compute indicative annual fee for HubSpot before submitting
-    // Use LCFS eligibility from first site (synchronous, no hex lookup needed for HS)
-    const _lcfsCheck = S.sites.length ? isLCFSEligibleCaaS(S.sites[0]) : false;
-    const _feeSnap = lookupFee(S.caasProduct, S.stalls, _lcfsCheck);
-    S.caasAnnualFee = Math.round(_feeSnap.annual * S.sites.length);
-    // Submit to HubSpot (non-blocking)
-    try { await submitToHubSpot(); } catch(err){ console.error('HubSpot error:',err); }
-    window.location.hash='quote';
-    document.getElementById('app').classList.add('gone');
-    const qp=document.getElementById('quote-page');qp.classList.add('on');
-    document.getElementById('prog-bar').style.width='100%';
-    document.getElementById('prog-lbl').textContent='100% complete';
-    // Load hex lookup if not already loaded, then render
-    if(!HEX_LOOKUP) await loadHexLookup();
-    await renderCaaSQuote(document.getElementById('q-wrap'));
-    return;
-  }
-
-  // ── Direct purchase path ──────────────────────────────────────
   try {
     await submitToHubSpot();
   } catch(err) {
@@ -1707,7 +1096,8 @@ function renderQuote(){
   return `
     <div class="q-head">
       <div>
-        <div class="q-logo"><?xml version="1.0" encoding="UTF-8"?><svg id="Layer_1" style="height:22px;width:auto;display:block;" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 980 270">
+        <div class="q-logo"><?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" style="height:22px;width:auto;display:block;" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 980 270">
   <!-- Generator: Adobe Illustrator 29.8.2, SVG Export Plug-In . SVG Version: 2.1.1 Build 3)  -->
   <defs>
     <style>
@@ -1731,20 +1121,13 @@ function renderQuote(){
   </g>
   <path class="st0" d="M155.38,135c0,5.26-4.27,9.52-9.55,9.52s-9.55-4.26-9.55-9.52,4.27-9.52,9.55-9.52,9.55,4.26,9.55,9.52ZM184.62,135c0,5.26,4.27,9.52,9.55,9.52s9.55-4.26,9.55-9.52-4.27-9.52-9.55-9.52c-5.27,0-9.55,4.26-9.55,9.52ZM205,90h-23.35l-9.84,17.03h33.19c16.99,0,27.97,10.98,27.97,27.97s-10.98,27.97-27.97,27.97h-17.14l-9.84,17.03h26.98c26.4,0,45-18.6,45-45s-18.6-45-45-45ZM135,162.97c-16.99,0-27.97-10.98-27.97-27.97s10.98-27.97,27.97-27.97h17.14l9.84-17.03h-26.98c-26.4,0-45,18.6-45,45s18.6,45,45,45h23.35l9.84-17.03h-33.19Z"/>
 </svg></div>
-        <div style="margin-top:16px;">
-          <div class="q-title">EV Charging Project Quote</div>
-          <div class="q-subtitle">Prepared for ${S.firstName} ${S.lastName}</div>
-        </div>
-      </div>
-      <div class="q-meta">
-        <div class="q-id">Quote #${S.quoteId}</div>
-        <div class="q-date">${S.quoteDate}</div>
-        <div class="q-badge">ESTIMATE</div>
-        <div style="margin-top:14px;">
-          <button class="btn btn-ghost btn-sm" onclick="savePdf()" style="padding:8px 16px;font-size:0.88rem;">Save as PDF <svg viewBox="0 0 14 14" fill="none" style="width:12px;height:12px;"><path d="M3 5V2h8v3M3 10H1V6h12v4h-2M3 8h8v4H3V8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        </div>
-      </div>
+        <div style="margin-top:22px"><div class="q-title">EV Charging Project Quote</div><div class="q-subtitle">Prepared for ${S.firstName} ${S.lastName}</div></div>
+             <div class="q-actions">
+      <button class="btn btn-ghost" onclick="savePdf()">Save as PDF</button>
     </div>
+      <div class="q-meta"><div class="q-id">Quote #${S.quoteId}</div><div class="q-date">${S.quoteDate}</div><div class="q-badge">ESTIMATE</div></div>
+    </div>
+      </div>
   
     
     <div class="q-sec">
@@ -1753,7 +1136,7 @@ function renderQuote(){
         <div class="q-info-card"><div class="qi-label">Contact</div><div class="qi-val">${S.firstName} ${S.lastName}</div></div>
         <div class="q-info-card"><div class="qi-label">Email</div><div class="qi-val">${S.email}</div></div>
         <div class="q-info-card"><div class="qi-label">Business Type</div><div class="qi-val">${bizLabel}</div></div>
-        <div class="q-info-card"><div class="qi-label">Site${S.sites&&S.sites.length>1?'s':''}</div><div class="qi-val">${S.sites&&S.sites.length?S.sites.join(' · '):(S.siteAddress||'—')}</div></div>
+        <div class="q-info-card"><div class="qi-label">Site Address</div><div class="qi-val">${S.siteAddress||'—'}</div></div>
         <div class="q-info-card"><div class="qi-label">Primary Reasons</div><div class="qi-val">${S.reasons.map(r=>rLabels[r]).join(', ')||'—'}</div></div>
         <div class="q-info-card"><div class="qi-label">Budget Approach</div><div class="qi-val">${budgetLabel}</div></div>
         <div class="q-info-card"><div class="qi-label">Target Completion</div><div class="qi-val">${startLabel}</div></div>
@@ -1848,7 +1231,15 @@ function renderQuote(){
     <div class="q-actions">
       <button class="btn btn-ghost" onclick="restart()" style="font-size:1rem;color:var(--muted);">Start another project</button>
     </div>
-    <div class="q-disclaimer">This estimate is for planning purposes only and is not a binding offer. Final pricing is subject to site review.</div>
+  </div>
+
+  <div style="margin:10px 0 8px;">
+    <button class="btn btn-primary" onclick="showPLPage()" style="width:100%;justify-content:center;padding:16px 22px;font-size:1.02rem;">
+      <svg viewBox="0 0 14 14" fill="none" style="width:16px;height:16px;"><path d="M1 10l4-4 3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Generate a 10-Year P&amp;L
+    </button>
+  </div>
+  <div class="q-disclaimer">This estimate is for planning purposes only and is not a binding offer. Final pricing is subject to site review.</div>
   `;
 }
 
@@ -1949,9 +1340,10 @@ function restart(){
   // Re-detect grant from URL param on restart so campaign links stay active
   const urlGrant = new URLSearchParams(window.location.search).get('grant');
   const grantOnRestart = (urlGrant && GRANTS[urlGrant]) ? urlGrant : '';
-  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',sites:[],stalls:4,budget:'',caasProduct:null,caasAnnualFee:0,battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
+  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',stalls:4,budget:'',battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
   // Clear hash without triggering the hashchange listener
   window.removeEventListener('hashchange', onHashChange);
+  document.getElementById('pl-page').classList.remove('on');
   window.location.hash='';
   setTimeout(()=>window.addEventListener('hashchange', onHashChange), 100);
   // Wipe the stage synchronously so no stale slides linger
@@ -1969,7 +1361,7 @@ document.addEventListener('keydown',e=>{
   }
 });
 
-function onHashChange(){ if(window.location.hash!=='#quote') restart(); }
+function onHashChange(){ const h=window.location.hash; if(h!=='#quote'&&h!=='#pl') restart(); }
 
 function goBackFromQuote(idx){
   document.getElementById('quote-page').classList.remove('on');
@@ -2053,14 +1445,7 @@ window.addEventListener('hashchange', onHashChange);
 // Init dots — clickable, each navigates to first slide of that step
 const dc=document.getElementById('dots');
 // Map dot index → first SLIDES index for that step
-// slide indices: 0=welcome,1=reason,2=contact,3=site+budget,
-// 4=caas-product(*),5=caas-summary(*),6=battery-interstitial,7=battery,
-// 8=retail-interstitial,9=retail,10=summary
-// (*) only on CaaS path. dotToSlide is path-adaptive.
-function getDotToSlide(){
-  return S.budget==='financed' ? [0,4,5,5] : [0,6,8,10];
-}
-const dotToSlide=[0,6,8,10]; // fallback (direct path)
+const dotToSlide=[0,4,6,8]; // step1→slide0, step2→slide4, step3→slide6, step4→slide8
 ['Intake','Energy','Retail','Summary'].forEach((_,i)=>{
   const d=document.createElement('div');
   d.className='dot'+(i===0?' on':'');
@@ -2071,13 +1456,889 @@ const dotToSlide=[0,6,8,10]; // fallback (direct path)
     const targetStep=i+1;
     const currentStep=SLIDES[cur].step;
     if(targetStep<=currentStep){
-      go(getDotToSlide()[i]);
+      go(dotToSlide[i]);
     }
   });
   dc.appendChild(d);
 });
 
 go(0);
+
+
+// ══════════════════════════════════════════════════════════════
+// ── P&L ENGINE ───────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+// P&L state
+let PL = {
+  siteAddress: '',      // current site being modeled
+  spd: 20,              // sessions/day from hex lookup (or default)
+  lastState: '',        // parsed state for LCFS check
+  plMap: null,          // leaflet map instance
+  plBatterySelected: false,
+  plSessionChart: null,
+  plCashflowChart: null,
+};
+
+// ── P&L CONSTANTS ────────────────────────────────────────────
+const KWH_PER_SESSION = 35;
+const UPTIME = 0.995;
+const PAYMENT_PROCESSING_FEE = 0.065;
+const SESSION_GROWTH_RATE = 0.10;
+const PRICE_INFLATION = 0.03;
+const COMPLIANCE_FEES_ANNUAL = 550; // ~$137.5/qtr × 4
+const OPS_EXPENSES_ANNUAL = 56000; // Annual operations & experiences
+const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwdb7Q3odA0ogtcyhUOCMihH5JzGR4ZzwGSkzZmJBd48JmgAnpINa47vs8PE7YtoTf0zA/exec';
+
+// ── P&L FORMATTERS ───────────────────────────────────────────
+function fmtCurrency(v) {
+    const abs = Math.abs(v);
+    let s;
+    if (abs >= 1000000) s = '$' + (v/1000000).toFixed(1) + 'M';
+    else if (abs >= 1000) s = '$' + Math.round(v/1000) + 'K';
+    else s = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v);
+    return v < 0 ? s : s;
+}
+function fmtCurrencyFull(v) {
+    return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v);
+}
+function fmtNum(v) { return new Intl.NumberFormat('en-US').format(v); }
+function fmtPct(v) { return (v*100).toFixed(1)+'%'; }
+function plFmtNum(v) { return new Intl.NumberFormat('en-US').format(v); }
+
+// ── IRR ──────────────────────────────────────────────────────
+function calculateIRR(cashFlows) {
+    let rate = 0.1;
+    for (let i = 0; i < 1000; i++) {
+        let npv = 0, dnpv = 0;
+        for (let t = 0; t < cashFlows.length; t++) {
+            npv += cashFlows[t] / Math.pow(1+rate, t);
+            dnpv -= t * cashFlows[t] / Math.pow(1+rate, t+1);
+        }
+        if (Math.abs(dnpv) < 1e-12) break;
+        const newRate = rate - npv/dnpv;
+        if (Math.abs(newRate - rate) < 1e-7) { rate = newRate; break; }
+        rate = newRate;
+    }
+    if (!isFinite(rate) || rate < -1 || rate > 10) return NaN;
+    return rate;
+}
+
+// ── SPD → GRID DRAW ──────────────────────────────────────────
+// SPD → Grid Draw lookup table (from Products sheet, PN Zero 2x200kW column)
+const SPD_GRID_DRAW_TABLE = [
+    [10, 210], [20, 251], [30, 284], [40, 304],
+    [50, 319], [60, 331], [70, 343.45], [80, 356.37]
+];
+
+function interpolateGridDraw(spd) {
+    const t = SPD_GRID_DRAW_TABLE;
+    if (spd <= t[0][0]) return t[0][1];
+    if (spd >= t[t.length-1][0]) return t[t.length-1][1];
+    for (let i = 0; i < t.length - 1; i++) {
+        if (spd >= t[i][0] && spd <= t[i+1][0]) {
+            const frac = (spd - t[i][0]) / (t[i+1][0] - t[i][0]);
+            return t[i][1] + frac * (t[i+1][1] - t[i][1]);
+        }
+    }
+    return t[t.length-1][1];
+}
+
+function interpolateGridDraw(spd) {
+    const t = SPD_GRID_DRAW_TABLE;
+    if (spd <= t[0][0]) return t[0][1];
+    if (spd >= t[t.length-1][0]) return t[t.length-1][1];
+    for (let i = 0; i < t.length - 1; i++) {
+        if (spd >= t[i][0] && spd <= t[i+1][0]) {
+            const frac = (spd - t[i][0]) / (t[i+1][0] - t[i][0]);
+            return t[i][1] + frac * (t[i+1][1] - t[i][1]);
+        }
+    }
+    return t[t.length-1][1];
+}
+
+// ── CORE P&L MATH ────────────────────────────────────────────
+function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, includeUtilityUpgrade, includeLCFS) {
+    const UTILITY_UPGRADE_COST = 60000;
+    const utilityUpgradeCost = includeUtilityUpgrade ? UTILITY_UPGRADE_COST : 0;
+    const totalCapEx = hardwareCost + designCost + constructionCost + (batteryCost || 0) + utilityUpgradeCost;
+
+    // If battery selected, demand charges are mitigated by 75%
+    const effectiveDemandRate = (batteryCost > 0) ? demandRate * 0.25 : demandRate;
+
+    const years = [];
+    const cashFlows = [-totalCapEx]; // Year 0
+
+    for (let y = 1; y <= 10; y++) {
+        const growth = Math.pow(1 + SESSION_GROWTH_RATE, y-1);
+        const inflation = Math.pow(1 + PRICE_INFLATION, y-1);
+
+        // Sessions
+        const annualSessions = spd * 365 * growth;
+
+        // kWh delivered (accounting for uptime)
+        const kwhDelivered = annualSessions * KWH_PER_SESSION * UPTIME;
+
+        // Prices inflated
+        const adjChargingPrice = chargingPrice * inflation;
+        const adjElecCost = elecCost * inflation;
+
+        // === REVENUE ===
+        const grossChargingRevenue = kwhDelivered * adjChargingPrice;
+        const paymentProcessingFee = grossChargingRevenue * PAYMENT_PROCESSING_FEE;
+        const netChargingRevenue = grossChargingRevenue - paymentProcessingFee;
+        const lcfsRevenue = includeLCFS ? 20000 : 0;
+
+        // === COSTS ===
+        // Energy: kWh drawn from grid includes ~11% round-trip loss (1/0.9 efficiency from XLS)
+        const kwhGridDraw = kwhDelivered / 0.9;
+        const energyCost = kwhGridDraw * adjElecCost;
+
+        // Demand charge: grid draw kW × effective demand rate ($/kW/month) × 12 months
+        // Battery mitigates 75% of demand charges when selected
+        const peakGridDrawKw = interpolateGridDraw(spd * Math.pow(1 + SESSION_GROWTH_RATE, y-1));
+        const annualDemandCharge = peakGridDrawKw * effectiveDemandRate * 12;
+
+        // Operations & Experiences (annual)
+        const opsCost = OPS_EXPENSES_ANNUAL;
+
+        // Compliance / other fees
+        const complianceCost = COMPLIANCE_FEES_ANNUAL * inflation;
+
+        const totalOpEx = paymentProcessingFee + energyCost + annualDemandCharge + opsCost;
+        const grossProfit = grossChargingRevenue + lcfsRevenue - totalOpEx;
+        const cashFlow = grossProfit;
+
+        cashFlows.push(cashFlow);
+
+        years.push({
+            y,
+            annualSessions: Math.round(annualSessions),
+            grossChargingRevenue,
+            lcfsRevenue,
+            paymentProcessingFee,
+            netChargingRevenue,
+            energyCost,
+            annualDemandCharge,
+            opsCost,
+            complianceCost,
+            totalOpEx,
+            grossProfit,
+            cashFlow
+        });
+    }
+
+    // IRR
+    const irr = calculateIRR(cashFlows);
+
+    // Breakeven
+    let cumCF = -totalCapEx;
+    let breakeven = null;
+    for (let i = 1; i < cashFlows.length; i++) {
+        const prev = cumCF;
+        cumCF += cashFlows[i];
+        if (cumCF >= 0 && breakeven === null) {
+            const frac = -prev / cashFlows[i];
+            breakeven = (i-1) + frac;
+        }
+    }
+
+    return { years, totalCapEx, hardwareCost, designCost, constructionCost, batteryCost: batteryCost || 0, utilityUpgradeCost, irr, breakeven };
+}
+
+// ── HELPERS ──────────────────────────────────────────────────
+function buildSessionProjections(dailySessions) {
+    const arr = [];
+    for (let y = 1; y <= 10; y++) {
+        arr.push(Math.round(dailySessions * 365 * Math.pow(1 + SESSION_GROWTH_RATE, y-1)));
+    }
+    return arr;
+}
+function fmtSliderVal(id, val) {
+    switch(id) {
+        case 'sliderSPD': return String(val);
+        case 'sliderChargingPrice': return '$' + parseFloat(val).toFixed(2);
+        case 'sliderElecPrice': return '$' + parseFloat(val).toFixed(2);
+        case 'sliderHardware':
+        case 'sliderConstruction':
+            return '$' + Math.round(val/1000) + 'k';
+        case 'sliderDemandRate':
+            return '$' + parseFloat(val).toFixed(2);
+    }
+    return val;
+}
+// ===== BATTERY HELPERS =====
+function getBatteryCost() {
+    const dr = parseFloat(document.getElementById('sliderDemandRate').value);
+    if (dr > 15) return { cost: 186000, label: '250 kW Battery' };
+    if (dr > 10) return { cost: 123000, label: '125 kW Battery' };
+    return null;
+}
+
+function updateBatteryRow() {
+    const dr = parseFloat(document.getElementById('sliderDemandRate').value);
+    const row = document.getElementById('batteryCheckboxRow');
+    if (dr > 10) {
+        row.style.display = 'block';
+    } else {
+        row.style.display = 'none';
+        document.getElementById('chkBattery').checked = false;
+        PL.plBatterySelected = false;
+    }
+}
+
+function onBatteryToggle() {
+    PL.plBatterySelected = document.getElementById('chkBattery').checked;
+    computeAndRenderPL();
+}
+
+function isLCFSState() {
+    const s = (PL.lastState||lastState||'').toLowerCase().trim();
+    return s === 'washington' || s === 'oregon' || s === 'california' ||
+           s === 'wa' || s === 'or' || s === 'ca';
+}
+
+// ── COMPUTE + RENDER ─────────────────────────────────────────
+// Adapted from P&L tool — targets #pl-page DOM elements
+function computeAndRenderPL() {
+    const spd = parseInt(document.getElementById('sliderSPD').value);
+    const chargingPrice = parseFloat(document.getElementById('sliderChargingPrice').value);
+    const elecCost = parseFloat(document.getElementById('sliderElecPrice').value);
+    const hardwareCost = parseFloat(document.getElementById('sliderHardware').value);
+    const designCost = 71500; // Fixed: Design & EPC
+    const constructionCost = parseFloat(document.getElementById('sliderConstruction').value);
+    const demandRate = parseFloat(document.getElementById('sliderDemandRate').value);
+
+    const battInfo = batterySelected ? getBatteryCost() : null;
+    const batteryCost = battInfo ? battInfo.cost : 0;
+    const batteryLabel = battInfo ? battInfo.label : '';
+    const includeLCFS = isLCFSState();
+
+    const result = computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, true, includeLCFS);
+    const { years, totalCapEx, irr, breakeven, utilityUpgradeCost } = result;
+
+    // Summary metrics
+    const totalRevenue = years.reduce((s,y) => s + y.grossChargingRevenue + y.lcfsRevenue, 0);
+    const totalNetRevenue = years.reduce((s,y) => s + y.netChargingRevenue, 0);
+    const totalOpEx = years.reduce((s,y) => s + y.totalOpEx, 0);
+    const totalNetProfit = years.reduce((s,y) => s + y.cashFlow, 0);
+
+    const irrValid = isFinite(irr) && !isNaN(irr) && irr >= 0;
+    document.getElementById('m_irr').textContent = irrValid ? (irr*100).toFixed(1)+'%' : '<0%';
+    document.getElementById('m_irr').className = 'metric-value' + (irrValid ? ' gold' : '');
+    document.getElementById('m_breakeven').textContent = breakeven !== null ? breakeven.toFixed(1)+'y' : '>10y';
+    document.getElementById('m_capex').textContent = fmtCurrency(totalCapEx);
+    document.getElementById('m_revenue').textContent = fmtCurrency(totalRevenue);
+    document.getElementById('m_profit').textContent = fmtCurrency(totalNetProfit);
+
+    // P&L Table
+    const thead = document.getElementById('plTableHead');
+    const tbody = document.getElementById('plTableBody');
+
+    // Headers
+    let thHTML = '<th>Line Item</th>';
+    for (let y = 1; y <= 10; y++) thHTML += `<th>Yr ${y}</th>`;
+    thHTML += '<th class="total-col">Total</th>';
+    thead.innerHTML = thHTML;
+
+    // Row builder
+    function row(label, vals, cls='', fmt=fmtCurrencyFull, noTotal=false) {
+        let html = `<tr class="${cls}"><td>${label}</td>`;
+        let total = 0;
+        for (const v of vals) {
+            const formatted = typeof v === 'number' ? fmt(v) : v;
+            const colorClass = typeof v === 'number' ? (v < 0 ? ' class="neg"' : '') : '';
+            html += `<td${colorClass}>${formatted}</td>`;
+            if (typeof v === 'number') total += v;
+        }
+        if (noTotal) {
+            html += `<td class="total-col">—</td></tr>`;
+        } else {
+            const totalFormatted = fmt(total);
+            const totalColorClass = total < 0 ? ' class="neg total-col"' : ' class="total-col"';
+            html += `<td${totalColorClass}>${totalFormatted}</td></tr>`;
+        }
+        return html;
+    }
+    function sectionRow(label) {
+        return `<tr class="section-header"><td colspan="13">${label}</td></tr>`;
+    }
+
+    let html = '';
+
+    // Sessions row
+    html += sectionRow('VOLUME');
+    html += row('Sessions / Day', years.map(y => y.annualSessions / 365), '', v => fmtNum(Math.round(v)), true);
+    html += row('Annual Sessions', years.map(y => y.annualSessions), '', fmtNum);
+
+    // Revenue
+    html += sectionRow('REVENUE <span class="section-note">EV charging also drives incremental retail revenue—<a href="https://electricera.tech/app/retail-experience-value-calculator" target="_blank">find out how much</a></span>');
+    html += row('Total Charging Revenue', years.map(y => y.grossChargingRevenue), 'subtotal');
+    if (includeLCFS) {
+        html += row('LCFS Credits', years.map(() => 20000));
+    }
+
+    // Costs
+    html += sectionRow('OPERATING COSTS');
+    html += row('Energy Cost', years.map(y => -y.energyCost));
+    html += row('Demand Charges', years.map(y => -y.annualDemandCharge));
+    html += row('Operations & Experiences', years.map(y => -y.opsCost));
+    html += row('Payment Processing Fee (6.5%)', years.map(y => -y.paymentProcessingFee), 'neg-row');
+    html += row('Total Operating Costs', years.map(y => -(y.paymentProcessingFee + y.energyCost + y.annualDemandCharge + y.opsCost)), 'subtotal');
+
+    // Profit
+    html += sectionRow('PROFIT');
+    html += row('Net Operating Profit', years.map(y => y.cashFlow), 'grand-total');
+
+    // CapEx rows — itemised
+    html += sectionRow('CAPEX');
+    html += row('Hardware (Electric Era RE400 Station)', years.map((y,i) => i === 0 ? -hardwareCost : 0));
+    if (batteryCost > 0) {
+        html += row(batteryLabel, years.map((y,i) => i === 0 ? -batteryCost : 0));
+    }
+    html += row('Design &amp; EPC', years.map((y,i) => i === 0 ? -designCost : 0));
+    html += row('Construction', years.map((y,i) => i === 0 ? -constructionCost : 0));
+    
+    html += row('Utility Upgrade (estimate)', years.map((y,i) => i === 0 ? -utilityUpgradeCost : 0));
+    const capexRow = years.map((y,i) => i === 0 ? -totalCapEx : 0);
+    html += row('Total CapEx (Year 0)', capexRow, 'subtotal');
+
+    // Cumulative CF
+    html += sectionRow('CASH FLOW');
+    let cum = -totalCapEx;
+    const cumCFs = years.map(y => { cum += y.cashFlow; return cum; });
+    html += row('Cumulative Free Cash Flow', cumCFs, 'grand-total', fmtCurrencyFull, true);
+
+    tbody.innerHTML = html;
+
+    // Cumulative Free Cash Flow Chart
+    const cfLabels = years.map(y => `Year ${y.y}`);
+    let cumCFChart = -totalCapEx;
+    const cumCFData = years.map(y => { cumCFChart += y.cashFlow; return Math.round(cumCFChart); });
+
+    const cashflowCtx = document.getElementById('cashflowChart').getContext('2d');
+    if (window._cashflowChart instanceof Chart) window._cashflowChart.destroy();
+
+    window._cashflowChart = new Chart(cashflowCtx, {
+        type: 'line',
+        data: {
+            labels: cfLabels,
+            datasets: [{
+                label: 'Cumulative Free Cash Flow',
+                data: cumCFData,
+                borderColor: '#F8B918',
+                backgroundColor: 'rgba(248,185,24,0.08)',
+                borderWidth: 2.5,
+                pointBackgroundColor: cumCFData.map(v => v >= 0 ? '#22C55E' : '#EF4444'),
+                pointBorderColor: cumCFData.map(v => v >= 0 ? '#22C55E' : '#EF4444'),
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                fill: true,
+                tension: 0.35
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#22222A',
+                    borderColor: '#38384A',
+                    borderWidth: 1,
+                    titleColor: '#E8E8F0',
+                    bodyColor: '#7A7A96',
+                    callbacks: {
+                        label: ctx => ' $' + ctx.parsed.y.toLocaleString()
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Year', color: '#7A7A96', font: { size: 11, weight: '600' }, padding: { top: 6 } },
+                    grid: { color: 'rgba(56,56,74,0.5)' },
+                    ticks: { color: '#7A7A96', font: { size: 11 } }
+                },
+                y: {
+                    title: { display: true, text: 'Cumulative Free Cash Flow ($)', color: '#7A7A96', font: { size: 11, weight: '600' }, padding: { bottom: 6 } },
+                    grid: { color: 'rgba(56,56,74,0.5)' },
+                    ticks: {
+                        color: '#7A7A96',
+                        font: { size: 11 },
+                        callback: v => '$' + (v >= 0 ? '' : '-') + Math.abs(v / 1000).toFixed(0) + 'k'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ── EXPORT ───────────────────────────────────────────────────
+function exportToXlsx() {
+    const table = document.getElementById('plTable');
+    if (!table) return;
+
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    // Header row
+    const headerCells = table.querySelectorAll('thead th');
+    const headers = Array.from(headerCells).map(th => th.textContent.trim());
+    wsData.push(headers);
+
+    // Body rows — read text content as displayed
+    const bodyRows = table.querySelectorAll('tbody tr');
+    bodyRows.forEach(tr => {
+        // Skip section header rows (they span all columns with a label only)
+        if (tr.classList.contains('section-header')) {
+            // Add a blank row then a bold section label
+            wsData.push([]);
+            wsData.push([tr.querySelector('td')?.textContent.trim() || '']);
+            return;
+        }
+        const cells = tr.querySelectorAll('td');
+        const rowData = Array.from(cells).map(td => {
+            const text = td.textContent.trim();
+            // Strip currency symbols/commas and parse as number where possible
+            const cleaned = text.replace(/[$,]/g, '');
+            const num = parseFloat(cleaned);
+            return isNaN(num) || text === '' ? text : num;
+        });
+        wsData.push(rowData);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Column widths
+    const colWidths = [{ wch: 32 }]; // Label column
+    for (let i = 0; i < 11; i++) colWidths.push({ wch: 14 }); // Yr 1-10 + Total
+    ws['!cols'] = colWidths;
+
+    // Style header row bold (basic)
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let C = range.s.c; C <= range.e.c; C++) {
+        const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws[cellAddr]) continue;
+        ws[cellAddr].s = { font: { bold: true } };
+    }
+
+    const site = (PL.siteAddress || lastAddress || 'EV Site').replace(/[^a-z0-9\s]/gi, '').trim().replace(/\s+/g, '_').slice(0, 30);
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `EV_PL_${site}_${date}.xlsx`;
+
+    XLSX.utils.book_append_sheet(wb, ws, '10-Year P&L');
+    XLSX.writeFile(wb, filename);
+}
+
+// ── SLIDER WIRING ─────────────────────────────────────────────
+function wirePLSliders() {
+  const sliderIds = ['sliderSPD','sliderChargingPrice','sliderElecPrice','sliderHardware','sliderConstruction','sliderDemandRate'];
+  const valMap = { sliderSPD:'valSPD', sliderChargingPrice:'valChargingPrice', sliderElecPrice:'valElecPrice', sliderHardware:'valHardware', sliderConstruction:'valConstruction', sliderDemandRate:'valDemandRate' };
+  sliderIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', function() {
+      document.getElementById(valMap[id]).textContent = fmtSliderVal(id, this.value);
+      if (id === 'sliderDemandRate') plUpdateBatteryRow();
+      computeAndRenderPL();
+    });
+  });
+  // Battery checkbox
+  const chk = document.getElementById('chkBattery');
+  if (chk) chk.addEventListener('change', function() { PL.plBatterySelected = this.checked; computeAndRenderPL(); });
+}
+
+function plUpdateBatteryRow() {
+  const dr = parseFloat(document.getElementById('sliderDemandRate').value);
+  const row = document.getElementById('batteryCheckboxRow');
+  if (!row) return;
+  if (dr > 10) {
+    row.style.display = 'block';
+  } else {
+    row.style.display = 'none';
+    const chk = document.getElementById('chkBattery');
+    if (chk) chk.checked = false;
+    PL.plBatterySelected = false;
+  }
+}
+
+// ── HEX LOOKUP FOR P&L ──────────────────────────────────────
+// Uses the same HEX_LOOKUP already loaded by the intake app
+async function lookupSPDForPL(address) {
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address);
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    if (!data || !data.length) return null;
+    const lat = parseFloat(data[0].lat);
+    const lon = parseFloat(data[0].lon);
+
+    // Parse state for LCFS
+    const US_STATES = ['washington','oregon','california','wa','or','ca'];
+    const parts = data[0].display_name.split(',').map(s => s.trim());
+    const usIdx = parts.findIndex(p => /united states/i.test(p));
+    PL.lastState = '';
+    if (usIdx > 0) {
+      for (let i = usIdx - 1; i >= 0; i--) {
+        if (US_STATES.includes(parts[i].toLowerCase())) { PL.lastState = parts[i]; break; }
+      }
+    }
+
+    // H3 lookup — use existing HEX_LOOKUP if available
+    if (typeof HEX_LOOKUP !== 'undefined' && HEX_LOOKUP && Object.keys(HEX_LOOKUP).length) {
+      const hexId = h3.latLngToCell(lat, lon, 6);
+      const spd = HEX_LOOKUP[hexId] ?? null;
+      return { spd: spd !== null ? Math.max(5, Math.min(100, Math.round(spd))) : null, lat, lon, displayName: data[0].display_name };
+    }
+    return { spd: null, lat, lon, displayName: data[0].display_name };
+  } catch(e) {
+    return null;
+  }
+}
+
+// ── LEAFLET MAP ───────────────────────────────────────────────
+function renderPLMap(lat, lon, displayName) {
+  const mapEl = document.getElementById('pl-map');
+  if (!mapEl) return;
+  if (PL.plMap) { PL.plMap.remove(); PL.plMap = null; }
+  setTimeout(() => {
+    PL.plMap = L.map('pl-map', { center: [lat, lon], zoom: 13, scrollWheelZoom: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(PL.plMap);
+    const icon = L.divIcon({
+      className: '',
+      html: '<div style="background:#F8B918;width:22px;height:22px;border-radius:50%;border:3px solid #1A1A1F;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>',
+      iconSize: [22, 22], iconAnchor: [11, 11]
+    });
+    L.marker([lat, lon], {icon}).addTo(PL.plMap).bindPopup('<strong>Proposed Site</strong>');
+    L.circle([lat, lon], {radius:1609.34, color:'#F8B918', fillColor:'#F8B918', fillOpacity:0.07, weight:2, dashArray:'6,4'}).addTo(PL.plMap);
+    setTimeout(() => PL.plMap?.invalidateSize(), 200);
+    const addr = document.getElementById('pl-map-address');
+    if (addr) addr.textContent = displayName + ' · 1-mile radius shown';
+  }, 100);
+}
+
+// ── SESSION FORECAST CHART ────────────────────────────────────
+function renderSessionChart(spd) {
+  const ctx = document.getElementById('pl-session-chart');
+  if (!ctx) return;
+  const SESSION_GROWTH_RATE = 0.10;
+  const labels = [];
+  const data = [];
+  for (let y = 1; y <= 10; y++) {
+    labels.push('Year ' + y);
+    data.push(Math.round(spd * 365 * Math.pow(1 + SESSION_GROWTH_RATE, y - 1)));
+  }
+  if (PL.plSessionChart) { PL.plSessionChart.destroy(); PL.plSessionChart = null; }
+  PL.plSessionChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Annual Sessions', data, backgroundColor: 'rgba(248,185,24,0.7)', borderColor: '#F8B918', borderWidth: 1, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true, aspectRatio: 2.5,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#888', font: { size: 11 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#888', font: { size: 11 }, callback: v => plFmtNum(v) } }
+      }
+    }
+  });
+}
+
+// ── SHOW / HIDE P&L PAGE ──────────────────────────────────────
+async function showPLPage() {
+  // Transition to P&L page
+  document.getElementById('quote-page').classList.remove('on');
+  const plPage = document.getElementById('pl-page');
+  plPage.classList.add('on');
+  plPage.scrollTop = 0;
+  window.location.hash = 'pl';
+
+  const wrap = document.getElementById('pl-wrap');
+  wrap.innerHTML = renderPLShell();
+  wirePLSliders();
+
+  // Determine sites to look up
+  const sites = (typeof S !== 'undefined' && S.siteAddress) ? [S.siteAddress] : [];
+
+  if (!sites.length) {
+    // No address — just show P&L with default SPD
+    PL.spd = 20;
+    PL.siteAddress = 'Custom Site';
+    finalizePLPage(null);
+    return;
+  }
+
+  // Show loading
+  const loadingEl = document.getElementById('pl-loading');
+  if (loadingEl) loadingEl.style.display = 'flex';
+
+  // Geocode + hex lookup
+  const result = await lookupSPDForPL(sites[0]);
+  if (loadingEl) loadingEl.style.display = 'none';
+
+  if (result && result.spd !== null) {
+    PL.spd = result.spd;
+    PL.siteAddress = sites[0];
+    finalizePLPage(result);
+  } else {
+    PL.spd = 20;
+    PL.siteAddress = sites[0];
+    finalizePLPage(result);
+  }
+}
+
+function finalizePLPage(geoResult) {
+  // Update stat cards
+  const SESSION_GROWTH_RATE = 0.10;
+  const spd = PL.spd;
+  const yr1 = Math.round(spd * 365);
+  const yr10 = Math.round(spd * 365 * Math.pow(1 + SESSION_GROWTH_RATE, 9));
+
+  const spdEl = document.getElementById('pl-stat-spd');
+  const yr1El = document.getElementById('pl-stat-yr1');
+  const yr10El = document.getElementById('pl-stat-yr10');
+  const siteEl = document.getElementById('pl-site-label');
+  const noDataBanner = document.getElementById('pl-no-data-banner');
+
+  if (spdEl) spdEl.textContent = spd;
+  if (yr1El) yr1El.textContent = plFmtNum(yr1);
+  if (yr10El) yr10El.textContent = plFmtNum(yr10);
+  if (siteEl) siteEl.textContent = PL.siteAddress || 'Custom Site';
+  if (noDataBanner) noDataBanner.style.display = (geoResult && geoResult.spd !== null) ? 'none' : 'block';
+
+  // Map
+  if (geoResult && geoResult.lat) {
+    renderPLMap(geoResult.lat, geoResult.lon, geoResult.displayName || PL.siteAddress);
+  }
+
+  // Session chart
+  renderSessionChart(spd);
+
+  // Set SPD slider to forecast value
+  const spdSlider = document.getElementById('sliderSPD');
+  const spdVal = document.getElementById('valSPD');
+  if (spdSlider) { spdSlider.value = spd; if (spdVal) spdVal.textContent = spd; }
+
+  // Initial P&L render
+  computeAndRenderPL();
+}
+
+function backToQuoteFromPL() {
+  document.getElementById('pl-page').classList.remove('on');
+  document.getElementById('quote-page').classList.add('on');
+  window.location.hash = 'quote';
+  document.getElementById('quote-page').scrollTop = 0;
+}
+
+// ── P&L PAGE SHELL HTML ───────────────────────────────────────
+function renderPLShell() {
+  return `
+    <div style="border-bottom:1px solid var(--border);padding:16px 0 16px;margin-bottom:0;display:flex;align-items:center;justify-content:space-between;">
+      <button class="btn btn-ghost" onclick="backToQuoteFromPL()" style="padding:8px 16px;font-size:.88rem;">← Back to Quote</button>
+      <span style="font-size:.78rem;font-family:var(--mono);color:var(--muted);">10-Year P&amp;L Generator</span>
+      <div style="width:120px;"></div>
+    </div>
+
+    <div class="pl-hero">
+      <h2>10-Year P&amp;L Model</h2>
+      <p id="pl-site-label" style="color:var(--gold);font-family:var(--mono);font-size:.9rem;margin-top:.5rem;">Loading…</p>
+    </div>
+
+    <div id="pl-loading" style="display:flex;flex-direction:column;align-items:center;padding:3rem 0;gap:14px;">
+      <div style="width:36px;height:36px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;"></div>
+      <div style="font-family:var(--mono);font-size:.82rem;color:var(--muted);">Looking up utilization data for your site…</div>
+    </div>
+
+    <div id="pl-no-data-banner" style="display:none;background:rgba(248,185,24,.07);border:1px solid var(--gold-border);border-radius:var(--r);padding:14px 18px;margin-bottom:1.5rem;font-size:.88rem;color:var(--muted);">
+      ⚠ No coverage data found for this location — using a default of 20 sessions/day. Adjust the SPD slider below to model different utilization scenarios.
+    </div>
+
+    <!-- Forecast stats -->
+    <div class="pl-stats-grid">
+      <div class="pl-stat-card">
+        <div class="pl-stat-label">Sessions / Day</div>
+        <div class="pl-stat-value gold" id="pl-stat-spd">--</div>
+        <div class="pl-stat-sub">Year 1 baseline from Paren data</div>
+      </div>
+      <div class="pl-stat-card">
+        <div class="pl-stat-label">Year 1 Sessions</div>
+        <div class="pl-stat-value" id="pl-stat-yr1">--</div>
+        <div class="pl-stat-sub">Annual total</div>
+      </div>
+      <div class="pl-stat-card">
+        <div class="pl-stat-label">Year 10 Sessions</div>
+        <div class="pl-stat-value" id="pl-stat-yr10">--</div>
+        <div class="pl-stat-sub">Projected (10% annual growth)</div>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div class="pl-card">
+      <div class="pl-card-title">Site Location</div>
+      <div id="pl-map" style="height:320px;border-radius:8px;overflow:hidden;background:var(--s3);"></div>
+      <p style="margin-top:.75rem;font-size:.78rem;color:var(--muted);" id="pl-map-address"></p>
+    </div>
+
+    <!-- Session projection chart -->
+    <div class="pl-card">
+      <div class="pl-card-title">10-Year Session Projection</div>
+      <canvas id="pl-session-chart"></canvas>
+    </div>
+
+    <!-- Sliders -->
+    <div class="pl-card">
+      <div class="pl-card-title">Operating Assumptions</div>
+      <div class="pl-card-sub">Year 1 values — projections grow 10% annually with 3% price inflation</div>
+      <div class="pl-slider-grid">
+
+        <div class="pl-slider-group">
+          <div class="pl-slider-header">
+            <span class="pl-slider-label">Sessions / Day</span>
+            <span class="pl-slider-value" id="valSPD">--</span>
+          </div>
+          <div class="pl-slider-desc">Baseline daily charging sessions (Year 1) — pre-filled from Paren data</div>
+          <input type="range" class="pl-range" id="sliderSPD" min="5" max="100" step="1" value="20">
+          <div class="pl-slider-range"><span>5</span><span>100</span></div>
+        </div>
+
+        <div class="pl-slider-group">
+          <div class="pl-slider-header">
+            <span class="pl-slider-label">Charging Price</span>
+            <span class="pl-slider-value" id="valChargingPrice">$0.50</span>
+          </div>
+          <div class="pl-slider-desc">Price charged to customers ($/kWh)</div>
+          <input type="range" class="pl-range" id="sliderChargingPrice" min="0.25" max="0.75" step="0.01" value="0.50">
+          <div class="pl-slider-range"><span>$0.25</span><span>$0.75</span></div>
+        </div>
+
+        <div class="pl-slider-group">
+          <div class="pl-slider-header">
+            <span class="pl-slider-label">Electricity Cost</span>
+            <span class="pl-slider-value" id="valElecPrice">$0.15</span>
+          </div>
+          <div class="pl-slider-desc">Your utility cost ($/kWh)</div>
+          <input type="range" class="pl-range" id="sliderElecPrice" min="0.05" max="0.30" step="0.01" value="0.15">
+          <div class="pl-slider-range"><span>$0.05</span><span>$0.30</span></div>
+        </div>
+
+        <div class="pl-slider-group">
+          <div class="pl-slider-header">
+            <span class="pl-slider-label">Demand Rate</span>
+            <span class="pl-slider-value" id="valDemandRate">$0.00</span>
+          </div>
+          <div class="pl-slider-desc">Utility demand charge ($/kW/month) — Electric Era's battery can mitigate up to 75%</div>
+          <input type="range" class="pl-range" id="sliderDemandRate" min="0" max="25" step="0.50" value="0">
+          <div class="pl-slider-range"><span>$0</span><span>$25/kW</span></div>
+        </div>
+
+        <div class="pl-battery-row" id="batteryCheckboxRow">
+          <div class="pl-battery-inner">
+            <input type="checkbox" id="chkBattery" style="width:18px;height:18px;accent-color:var(--gold);cursor:pointer;">
+            <label for="chkBattery" style="cursor:pointer;font-size:.88rem;color:var(--text);">
+              Add Electric Era Battery — reduces demand charges by 75%
+              <span style="font-size:.78rem;color:var(--muted);display:block;margin-top:2px;" id="batteryLabel"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="pl-slider-group">
+          <div class="pl-slider-header">
+            <span class="pl-slider-label">Hardware Cost</span>
+            <span class="pl-slider-value" id="valHardware">$200k</span>
+          </div>
+          <div class="pl-slider-desc">Upfront hardware CapEx. A 4-port station costs about $200,000.</div>
+          <input type="range" class="pl-range" id="sliderHardware" min="100000" max="1000000" step="5000" value="200000">
+          <div class="pl-slider-range"><span>$100k</span><span>$1M</span></div>
+        </div>
+
+        <div class="pl-slider-group">
+          <div class="pl-slider-header">
+            <span class="pl-slider-label">Construction Cost</span>
+            <span class="pl-slider-value" id="valConstruction">$125k</span>
+          </div>
+          <div class="pl-slider-desc">Upfront construction CapEx. Can be significantly reduced if your site is already under construction.</div>
+          <input type="range" class="pl-range" id="sliderConstruction" min="80000" max="350000" step="5000" value="125000">
+          <div class="pl-slider-range"><span>$80k</span><span>$350k</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="pl-metrics-grid" id="metricsGrid">
+      <div class="pl-metric-card featured">
+        <div class="pl-metric-label">10-Year IRR</div>
+        <div class="pl-metric-value" id="m_irr">--</div>
+        <div class="pl-metric-sub">Internal rate of return</div>
+      </div>
+      <div class="pl-metric-card">
+        <div class="pl-metric-label">Breakeven</div>
+        <div class="pl-metric-value" id="m_breakeven">--</div>
+        <div class="pl-metric-sub">Years to payback</div>
+      </div>
+      <div class="pl-metric-card">
+        <div class="pl-metric-label">Total CapEx</div>
+        <div class="pl-metric-value" id="m_capex">--</div>
+        <div class="pl-metric-sub">Upfront investment</div>
+      </div>
+      <div class="pl-metric-card">
+        <div class="pl-metric-label">10-Year Revenue</div>
+        <div class="pl-metric-value" id="m_revenue">--</div>
+        <div class="pl-metric-sub">Gross charging revenue</div>
+      </div>
+      <div class="pl-metric-card">
+        <div class="pl-metric-label">10-Year Net Profit</div>
+        <div class="pl-metric-value" id="m_profit">--</div>
+        <div class="pl-metric-sub">After all OpEx</div>
+      </div>
+    </div>
+
+    <!-- P&L Table -->
+    <div class="pl-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
+        <div class="pl-card-title" style="margin-bottom:0;">Annual P&amp;L Summary</div>
+        <button class="pl-btn-export" id="exportXlsxBtn" onclick="exportToXlsx()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Save to XLSX
+        </button>
+      </div>
+      <div class="pl-table-wrap">
+        <table class="pl-table" id="plTable">
+          <thead><tr id="plTableHead"></tr></thead>
+          <tbody id="plTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Cash flow chart -->
+    <div class="pl-card">
+      <div class="pl-card-title">Cumulative Free Cash Flow</div>
+      <canvas id="cashflowChart" style="max-height:320px;"></canvas>
+    </div>
+
+    <!-- What's next -->
+    <div class="pl-whats-next">
+      <h3>What's next?</h3>
+      <p class="pl-wn-intro" style="color:var(--muted);margin-bottom:.75rem;font-size:.88rem;">If your IRR looks good, reach out to the Electric Era team to move forward.</p>
+      <ul class="pl-wn-list">
+        <li><span class="pl-wn-bullet">↗</span><span><strong>Incremental retail value</strong> — <a href="https://electricera.tech/app/retail-experience-value-calculator" target="_blank" style="color:var(--gold);">calculate the revenue impact</a></span></li>
+        <li><span class="pl-wn-bullet">↗</span><span><strong>Grant subsidization</strong> — <a href="https://electricera.tech/government-funding" target="_blank" style="color:var(--gold);">learn about available funding</a></span></li>
+        <li><span class="pl-wn-bullet">→</span><span><strong>Battery storage</strong> can reduce demand charges and accelerate installation timelines</span></li>
+        <li><span class="pl-wn-bullet">→</span><span><strong>Depreciation</strong> (and bonus depreciation) tax advantages can significantly improve your IRR</span></li>
+      </ul>
+    </div>
+
+    <div class="pl-disclaimer">
+      This model is for illustrative purposes only. Actual results will vary based on site conditions, utility rates, and real-world demand. Not a guarantee of financial performance.
+    </div>
+  `;
+}
+// ══════════════════════════════════════════════════════════════
+// ── END P&L ENGINE ────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
 </script>
 </body>
 </html>
