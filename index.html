@@ -267,7 +267,7 @@ const PRODUCT_META = {
 
 // ── LCFS ─────────────────────────────────────────────────────
 const LCFS_STATES = ['CA', 'OR', 'WA', 'CALIFORNIA', 'OREGON', 'WASHINGTON'];
-const LCFS_RATE   = 0.10;  // $/kWh delivered
+const LCFS_RATE   = 0.15;  // $/kWh delivered
 
 function isLCFSEligible(address) {
   const upper = address.toUpperCase();
@@ -677,7 +677,7 @@ async function showQuote() {
         ${siteRows}
         <div class="dt-total port-cols"><span>Portfolio total</span><span>${fmt(portMonthly)}</span><span>${fmt(portAnnual)}</span><span class="hide-sm">${fmt(port10yr)}</span><span class="hide-sm"></span></div>
       </div>
-      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">SPD = sessions per day. Estimated from Paren EV Sessions data.${siteResults.some(s=>s.lcfs) ? ' LCFS credit applied to eligible sites (CA, OR, WA) at $0.007/kWh delivered.' : ''}</p>
+      <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">SPD = sessions per day. Estimated from Paren EV Sessions data.</p>
     </div>` : ''}
 
     <!-- UTILIZATION -->
