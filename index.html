@@ -864,18 +864,7 @@ async function showQuote() {
 
   const productMeta   = PRODUCT_META[S.product] || { label: S.product, kw: '—' };
 
-  // Per-site opex rows
-  const opexRows = r.opex.map((v,i) => {
-    const margin = r.annual>0 ? Math.round((r.annual-v)/r.annual*100) : 0;
-    return `<div class="dt-row opex-cols">
-      <span>Yr ${i+1}</span>
-      <span>${fmt(v)}</span>
-      <span>${fmt(r.annual)}</span>
-      <span class="hide-sm" style="color:${r.annual-v>=0?'var(--gold)':'#ff7070'}">${fmt(r.annual-v)}</span>
-      <span class="hide-sm">${margin}%</span>
-    </div>`;
-  }).join('');
-  const totalMargin = r.total10>0 ? Math.round((r.total10-r.totalOpex)/r.total10*100) : 0;
+
 
   const LCFS_BADGE = `<span style="font-size:0.62rem;font-family:var(--mono);background:rgba(248,185,24,.10);border:1px solid var(--gold-border);border-radius:3px;padding:1px 5px;color:var(--gold);margin-left:6px;vertical-align:middle;letter-spacing:.04em;">LCFS</span>`;
 
