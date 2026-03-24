@@ -322,25 +322,25 @@ const S = {
 const FIXED_IRR = 12.0;  // not exposed to user
 
 // ── PRICING MODEL ────────────────────────────────────────────
-// Costs sourced from EE_Pricing_for_CaaS_Price_Math.xlsx
-// All stations assumed no battery (battery can be added later per site)
+// Fees snap directly to the reference table (EE___MN8_CaaS_Calculator XLSX,
+// "Indicative CaaS Fee" sheet, IRR = 12%). Stall counts > 8 display the
+// 8-stall fee with a "+" suffix to indicate the floor, not a firm price.
 //
-// CAPEX by product × stall count:
-//   Base Station: Hardware + Software + Design & EPC + Construction
-//   RE400:        Hardware + Software + Design & EPC + Construction
-// CAPEX sourced from EE___MN8_CaaS_Calculator XLSX, "Electric Era Standard Pricing" sheet.
-// Each config = line items from pricing sheet + $250k construction.
-// Base: Switchgear + Chargers (SK Signet) + PowerNode Zero + O&M prepay (10yr)
-//       + Station Software Suite (10yr) + Shipping + Construction
-// RE400: Chargers ($47.5k/port) + Software ($120k/port) + Shipping + Construction
-const CAPEX = {
-  base:  { 4: 163000  + 20000 + 100000 + 40000  + 6000 + 250000,  // 579,000
-            6: 238000 + 20000 + 210000 + 60000  + 6000 + 250000,  // 784,000
-            8: 300000 + 20000 + 280000 + 80000  + 6000 + 250000}, // 916,000
-  re400: { 4: 190000 + 480000 + 6000 + 250000,                    // 926,000
-            6: 285000 + 720000 + 6000 + 250000,                   // 1,261,000
-            8: 380000 + 960000 + 6000 + 250000 },                 // 1,596,000
+// TABLE_FEES[product][stalls] = { noLcfs, lcfs }  (annual $)
+// Stall counts supported: 4, 6, 8. Anything above 8 → capped at 8.
+const TABLE_FEES = {
+  re400: {
+    4: { noLcfs: 187000, lcfs: 117000 },
+    6: { noLcfs: 258000, lcfs: 154000 },
+    8: { noLcfs: 329000, lcfs: 191000 },
+  },
+  base: {
+    4: { noLcfs: 116000, lcfs:  76000 },
+    6: { noLcfs: 160000, lcfs: 101000 },
+    8: { noLcfs: 197000, lcfs: 118000 },
+  },
 };
+const TABLE_STALLS = [4, 6, 8]; // supported stall counts in the table
 
 // Product display names and per-port kW
 const PRODUCT_META = {
@@ -375,43 +375,33 @@ function lcfsCreditYear1(spd) {
   return LCFS_RATE * 35 * spd * 365;
 }
 
-// Base OpEx profile (4-stall) from original XLSX — indexed Year 1–10
-const BASE_OPEX_4STALL = [20607,21109,21626,22159,22708,23274,23857,24458,25077,25715];
-
-function buildCapex(product, stalls) {
-  return CAPEX[product][stalls];
-}
-
-function buildOpex(stalls) {
-  const scale = stalls / 4;
-  return BASE_OPEX_4STALL.map(v => Math.round(v * scale));
-}
-
-
-// ── FINANCIAL ENGINE ─────────────────────────────────────────
-function calcFee(product, stalls, irrPct, creditNPV = 0) {
-  const capex = buildCapex(product, stalls);
-  const opex  = buildOpex(stalls);
-  const r = irrPct / 100;
-  let opexNPV = 0, annuity = 0;
-  for (let t = 1; t <= 10; t++) {
-    opexNPV += opex[t-1] / Math.pow(1+r, t);
-    annuity += 1         / Math.pow(1+r, t);
-  }
-  const annual = (capex + opexNPV - creditNPV) / annuity;
+// ── FEE LOOKUP ENGINE ────────────────────────────────────────
+// Snaps stall count to the nearest supported table entry (≤ 8).
+// Returns fee object with a `capped` flag when stalls > 8.
+function lookupFee(product, stalls, lcfsEligible) {
+  const capped  = stalls > 8;
+  const snapKey = capped ? 8 : (TABLE_STALLS.includes(stalls) ? stalls : 8);
+  const row     = TABLE_FEES[product][snapKey];
+  const annual  = lcfsEligible ? row.lcfs : row.noLcfs;
   return {
-    monthly:  annual / 12,
     annual,
-    total10:  annual * 10,
-    totalOpex: opex.reduce((a,b) => a+b, 0),
-    opex,
-    capex,
-    lcfs: creditNPV > 0,
-    creditNPV,
+    monthly:   annual / 12,
+    total10:   annual * 10,
+    lcfs:      lcfsEligible,
+    capped,
+    snapStalls: snapKey,
   };
 }
 
+// Backwards-compat alias used in a few places
+function calcFee(product, stalls, _irr, creditNPV) {
+  const lcfsEligible = creditNPV > 0;
+  return lookupFee(product, stalls, lcfsEligible);
+}
+
 function fmt(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+// Format with optional "+" suffix for capped (above-table) stall counts
+function fmtFee(n, capped) { return fmt(n) + (capped ? '+' : ''); }
 
 // ── SITE MANAGEMENT ──────────────────────────────────────────
 
@@ -753,14 +743,17 @@ const SLIDES = [
     <h1>How many <em>charging stalls</em>?</h1>
     <p class="sub">Each stall has one ${meta.label} delivering up to ${meta.kw} kW. Select the option that best fits your sites.</p>
     <div class="stall-grid" style="grid-template-columns:repeat(3,1fr);">
-      ${[4,6,8].map(n => `
+      ${[4,6,8,10,12,16].map(n => {
+        const capped = n > 8;
+        return `
         <div class="stall-tile ${S.stalls===n?'sel':''}" onclick="pickStalls(${n},this)">
           <div class="st-num">${n}</div>
-          <div class="st-kw">${meta.kw} kW / port</div>
-        </div>`).join('')}
+          <div class="st-kw">${meta.kw} kW / port${capped ? ' <span style="font-size:0.6rem;opacity:.6;">indicative</span>' : ''}</div>
+        </div>`;
+      }).join('')}
     </div>
     <div style="font-size:0.78rem;font-family:var(--mono);color:var(--muted);margin-top:6px;">
-      ${S.stalls ? `<span style="color:var(--gold);">${S.stalls} stalls selected</span> · ${S.stalls} × ${meta.label} · ${meta.kw} kW per port` : 'Select a stall count above'}
+      ${S.stalls ? `<span style="color:var(--gold);">${S.stalls} stalls selected</span> · ${S.stalls} × ${meta.label} · ${meta.kw} kW per port${S.stalls > 8 ? ' · fee shown as indicative minimum' : ''}` : 'Select a stall count above'}
     </div>
     <div class="ferr" id="e-stalls" style="margin-top:8px;">Please select a stall count.</div>
     <div class="cta-row">
@@ -852,8 +845,7 @@ async function showQuote() {
   const siteResults = siteData.map(sd => {
     const eligible  = isLCFSEligible(sd.address);
     const spd1      = (eligible && sd.status === 'found') ? sd.spd : 0;
-    const creditNPV = eligible ? lcfsCreditNPV(spd1, FIXED_IRR / 100) : 0;
-    const fee       = calcFee(S.product, S.stalls, FIXED_IRR, creditNPV);
+    const fee       = lookupFee(S.product, S.stalls, eligible);
     return { ...sd, fee, lcfs: eligible, lcfsCredit1: lcfsCreditYear1(spd1) };
   });
 
@@ -868,6 +860,7 @@ async function showQuote() {
   const portMonthly = siteResults.reduce((a, s) => a + s.fee.monthly, 0);
   const portAnnual  = siteResults.reduce((a, s) => a + s.fee.annual,  0);
   const port10yr    = siteResults.reduce((a, s) => a + s.fee.total10, 0);
+  const anyCapped   = siteResults.some(s => s.fee.capped);
 
   const productMeta   = PRODUCT_META[S.product] || { label: S.product, kw: '—' };
 
@@ -892,9 +885,9 @@ async function showQuote() {
       : `<span style="color:var(--muted);font-size:0.76rem;">No data</span>`;
     return `<div class="dt-row port-cols">
       <span style="color:var(--dim);font-size:0.82rem;">${sd.address}${sd.lcfs ? LCFS_BADGE : ''}</span>
-      <span>${fmt(sd.fee.monthly)}</span>
-      <span>${fmt(sd.fee.annual)}</span>
-      <span class="hide-sm">${fmt(sd.fee.total10)}</span>
+      <span>${fmtFee(sd.fee.monthly, sd.fee.capped)}</span>
+      <span>${fmtFee(sd.fee.annual, sd.fee.capped)}</span>
+      <span class="hide-sm">${fmtFee(sd.fee.total10, sd.fee.capped)}</span>
       <span class="hide-sm">${spdCell}</span>
     </div>`;
   }).join('') : '';
@@ -919,21 +912,21 @@ async function showQuote() {
     <div class="q-sec">
       <div class="fee-hero">
         <div class="fee-hero-eyebrow">${isPortfolio ? 'Total portfolio monthly fee' : 'Monthly subscription fee'}</div>
-        <div class="fee-hero-amount">${fmt(portMonthly)}</div>
-        <div class="fee-hero-per">per month · fixed for 10-year term${isPortfolio ? ' · '+n+' sites' : ''}</div>
-        <div class="fee-hero-sub">${fmt(portAnnual)}/yr · ${fmt(port10yr)} over full term</div>
+        <div class="fee-hero-amount">${fmtFee(portMonthly, anyCapped)}</div>
+        <div class="fee-hero-per">per month · fixed for 10-year term${isPortfolio ? ' · '+n+' sites' : ''}${anyCapped ? ' · indicative minimum' : ''}</div>
+        <div class="fee-hero-sub">${fmtFee(portAnnual, anyCapped)}/yr · ${fmtFee(port10yr, anyCapped)} over full term</div>
       </div>
       <div class="metric-strip ${isPortfolio ? 'cols-3' : 'cols-2'}">
         ${isPortfolio ? `
         <div class="metric-card">
           <div class="metric-label">Per-site monthly fee</div>
-          <div class="metric-val">${fmt(r.monthly)}</div>
-          <div class="metric-sub">${fmt(r.annual)}/yr per site</div>
+          <div class="metric-val">${fmtFee(r.monthly, anyCapped)}</div>
+          <div class="metric-sub">${fmtFee(r.annual, anyCapped)}/yr per site</div>
         </div>` : ''}
         <div class="metric-card">
           <div class="metric-label">${isPortfolio ? 'Portfolio annual fee' : 'Annual fee'}</div>
-          <div class="metric-val">${fmt(portAnnual)}</div>
-          <div class="metric-sub">${fmt(port10yr)} over 10-year term</div>
+          <div class="metric-val">${fmtFee(portAnnual, anyCapped)}</div>
+          <div class="metric-sub">${fmtFee(port10yr, anyCapped)} over 10-year term</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">Contract term</div>
@@ -950,7 +943,7 @@ async function showQuote() {
       <div class="data-table">
         <div class="dt-head port-cols"><span>Site address</span><span>Monthly</span><span>Annual</span><span class="hide-sm">10-Yr total</span><span class="hide-sm">Est. SPD (Yr 1)</span></div>
         ${siteRows}
-        <div class="dt-total port-cols"><span>Portfolio total</span><span>${fmt(portMonthly)}</span><span>${fmt(portAnnual)}</span><span class="hide-sm">${fmt(port10yr)}</span><span class="hide-sm"></span></div>
+        <div class="dt-total port-cols"><span>Portfolio total</span><span>${fmtFee(portMonthly, anyCapped)}</span><span>${fmtFee(portAnnual, anyCapped)}</span><span class="hide-sm">${fmtFee(port10yr, anyCapped)}</span><span class="hide-sm"></span></div>
       </div>
       <p style="font-size:0.7rem;color:var(--muted);margin-top:7px;font-family:var(--mono);">SPD = sessions per day. Estimated from Paren EV Sessions data.</p>
     </div>` : ''}
