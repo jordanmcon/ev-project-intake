@@ -246,7 +246,18 @@ async function loadHexLookup() {
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    HEX_LOOKUP = await res.json();
+    const raw = await res.json();
+    // Support both formats:
+    //   Legacy (inline): { "hex_id": spd_value, ... }
+    //   New file:        { "hexagons": [ { hex_id, daily_sessions, ... }, ... ] }
+    if (raw.hexagons && Array.isArray(raw.hexagons)) {
+      HEX_LOOKUP = {};
+      for (const entry of raw.hexagons) {
+        HEX_LOOKUP[entry.hex_id] = entry.daily_sessions;
+      }
+    } else {
+      HEX_LOOKUP = raw;
+    }
   } catch (e) {
     console.error('Failed to load hexagon lookup:', e);
     HEX_LOOKUP = {}; // graceful degradation — lookups will return no_data
