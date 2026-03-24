@@ -170,6 +170,9 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.18)}
 .date-pill.sel .dp-full{color:var(--gold)}
 
 /* FOOTER */
+.upload-zone{border:1px dashed var(--border);border-radius:var(--r);padding:14px 18px;cursor:pointer;transition:all .17s;text-align:center;font-size:0.88rem;color:var(--muted);margin-bottom:8px}
+.upload-zone:hover{border-color:var(--gold-border);color:var(--text)}
+.upload-zone input{display:none}
 footer{padding:13px 36px;border-top:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
 .dots{display:flex;gap:5px}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--s3);transition:all .3s;cursor:default}
@@ -255,7 +258,9 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
 /* ═══════════════════════════════════════════════════
    P&L TOOL STYLES (scoped to #pl-page)
    ═══════════════════════════════════════════════════ */
-#pl-page{display:none;min-height:100vh;overflow-y:auto;background:var(--bg)}
+#pl-page{display:none;min-height:100vh;background:var(--bg)}
+body.pl-active{overflow:auto !important}
+body.pl-active #pl-page{display:block;overflow-y:auto;height:auto}
 #pl-page.on{display:block}
 #pl-page .pl-container{max-width:1100px;margin:0 auto;padding:0 2rem 4rem}
 #pl-page .pl-hero{text-align:center;padding:3rem 2rem 1.5rem;max-width:760px;margin:0 auto}
@@ -374,6 +379,134 @@ kbd{display:inline-flex;align-items:center;justify-content:center;width:18px;hei
 
 
 <script>
+
+// ── INTAKE MULTI-SITE ADDRESS INPUT ──────────────────────────
+// Nominatim autocomplete + verification, US-only
+let _iAcTimer = null, _iAcActive = -1, _iAcResults = [], _iAcAbort = null;
+
+function _iNominatimUrl(params) {
+  return 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&accept-language=en&' +
+    Object.entries(params).map(([k,v]) => k+'='+encodeURIComponent(v)).join('&');
+}
+function _iBuildLabel(r) {
+  const a = r.address || {};
+  const parts = [
+    a.house_number && a.road ? a.house_number+' '+a.road : (a.road||null),
+    a.city||a.town||a.village||a.municipality||null,
+    a.state||null, a.postcode||null
+  ].filter(Boolean);
+  return parts.length >= 2 ? parts.join(', ') : r.display_name;
+}
+function renderIntakeSiteTags() {
+  const wrap = document.getElementById('intake-site-tags'); if(!wrap) return;
+  wrap.innerHTML = S.sites.map((s,i) => `
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:4px 10px 4px 8px;font-size:0.85rem;color:var(--text);margin:3px 3px 3px 0;">
+      <span style="width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 5px rgba(74,222,128,0.5);display:inline-block;"></span>${s}
+      <button onmousedown="removeIntakeSite(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0;line-height:1;" title="Remove">✕</button>
+    </span>`).join('');
+  const ctr = document.getElementById('intake-site-count');
+  if(ctr) ctr.textContent = S.sites.length ? S.sites.length+' site'+(S.sites.length>1?'s':'')+' added' : '';
+}
+function removeIntakeSite(i) { S.sites.splice(i,1); if(!S.sites.length) S.siteAddress=''; else S.siteAddress=S.sites[0]; renderIntakeSiteTags(); }
+
+function closeIntakeSuggestions() {
+  const box = document.getElementById('intake-suggestions'); if(box) box.innerHTML='';
+  _iAcActive=-1; _iAcResults=[];
+}
+function pickIntakeSuggestion(i) {
+  const item = _iAcResults[i]; if(!item) return;
+  closeIntakeSuggestions();
+  if(!S.sites.includes(item.label)) { S.sites.push(item.label); if(!S.siteAddress) S.siteAddress=item.label; renderIntakeSiteTags(); }
+  const inp=document.getElementById('siteAddressInput'); if(inp) inp.value='';
+  const ev=document.getElementById('e-intake-verify'); if(ev) ev.style.display='none';
+}
+async function _iFetchSuggestions(query) {
+  if(_iAcAbort) _iAcAbort.abort();
+  _iAcAbort = new AbortController();
+  const box = document.getElementById('intake-suggestions');
+  if(box) box.innerHTML='<div style="padding:10px 14px;font-size:0.82rem;color:var(--muted);">Searching…</div>';
+  try {
+    const url = _iNominatimUrl({q:query,limit:5,addressdetails:1});
+    const res = await fetch(url,{signal:_iAcAbort.signal,headers:{'Accept-Language':'en'}});
+    const data = await res.json();
+    const us = (data||[]).filter(r=>(r.address||{}).country_code==='us');
+    _iAcResults = us.map(r=>({label:_iBuildLabel(r),raw:r}));
+    _iAcActive = -1;
+    if(!_iAcResults.length){if(box)box.innerHTML='<div style="padding:10px 14px;font-size:0.82rem;color:#ff7070;">No US addresses found — try adding city and state</div>';return;}
+    const esc=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const re=new RegExp('('+esc+')','gi');
+    if(box) box.innerHTML=_iAcResults.map((item,i)=>
+      `<div style="padding:10px 14px;font-size:0.9rem;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s;" data-i="${i}"
+        onmouseover="this.style.background='var(--s3)'" onmouseout="this.style.background=''"
+        onmousedown="pickIntakeSuggestion(${i})">${item.label.replace(re,'<em style=\'color:var(--gold);font-style:normal;\'>$1</em>')}</div>`
+    ).join('');
+  } catch(e){ if(e.name!=='AbortError'&&box) box.innerHTML=''; }
+}
+function onIntakeSiteInput(e) {
+  const val=e.target.value.trim(); clearTimeout(_iAcTimer);
+  if(val.length<4){closeIntakeSuggestions();return;}
+  _iAcTimer=setTimeout(()=>_iFetchSuggestions(val),350);
+}
+function onIntakeSiteKeydown(e) {
+  const box=document.getElementById('intake-suggestions');
+  const items=box?box.querySelectorAll('[data-i]'):[];
+  if(e.key==='ArrowDown'){e.preventDefault();_iAcActive=Math.min(_iAcActive+1,items.length-1);items.forEach((el,i)=>{el.style.background=i===_iAcActive?'var(--s3)':''});}
+  else if(e.key==='ArrowUp'){e.preventDefault();_iAcActive=Math.max(_iAcActive-1,-1);items.forEach((el,i)=>{el.style.background=i===_iAcActive?'var(--s3)':''});}
+  else if(e.key==='Enter'){e.preventDefault();if(_iAcActive>=0&&_iAcResults[_iAcActive])pickIntakeSuggestion(_iAcActive);else addIntakeSite();}
+  else if(e.key==='Escape') closeIntakeSuggestions();
+}
+async function _iVerify(raw) {
+  try {
+    const url=_iNominatimUrl({q:raw,limit:1,addressdetails:1});
+    const res=await fetch(url,{headers:{'Accept-Language':'en'}});
+    const data=await res.json();
+    if(!data||!data.length)return null;
+    if((data[0].address||{}).country_code!=='us')return null;
+    return _iBuildLabel(data[0]);
+  }catch(e){return null;}
+}
+async function addIntakeSite() {
+  const inp=document.getElementById('siteAddressInput'); if(!inp) return;
+  const val=inp.value.trim(); if(!val) return;
+  closeIntakeSuggestions();
+  if(S.sites.includes(val)){inp.value='';return;}
+  const btn=document.getElementById('intake-add-btn');
+  if(btn){btn.disabled=true;btn.innerHTML='<span style="display:inline-block;width:11px;height:11px;border:1.5px solid rgba(255,255,255,0.2);border-top-color:var(--text);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;"></span> Verifying…';}
+  const resolved=await _iVerify(val);
+  if(btn){btn.disabled=false;btn.innerHTML='+ Add';}
+  if(resolved){
+    if(!S.sites.includes(resolved)){S.sites.push(resolved);if(!S.siteAddress)S.siteAddress=resolved;}
+    inp.value='';
+    const ev=document.getElementById('e-intake-verify'); if(ev) ev.style.display='none';
+  } else {
+    const ev=document.getElementById('e-intake-verify');
+    if(ev){ev.textContent=`Could not verify "${val}" as a US address.`;ev.style.display='block';}
+  }
+  renderIntakeSiteTags();
+}
+function handleIntakeCSV(file) {
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const lines=e.target.result.split('\n').map(l=>l.replace(/^["']|["']$/g,'').trim()).filter(Boolean);
+    const start=/address|site|location/i.test(lines[0])?1:0;
+    const toAdd=lines.slice(start).filter(l=>!S.sites.includes(l));
+    if(!toAdd.length)return;
+    const btn=document.getElementById('intake-add-btn');
+    if(btn){btn.disabled=true;btn.innerHTML='Verifying…';}
+    const failed=[];
+    for(const line of toAdd){
+      const resolved=await _iVerify(line);
+      if(resolved){if(!S.sites.includes(resolved)){S.sites.push(resolved);if(!S.siteAddress)S.siteAddress=S.sites[0];}}
+      else failed.push(line);
+      await new Promise(r=>setTimeout(r,200));
+    }
+    if(btn){btn.disabled=false;btn.innerHTML='+ Add';}
+    if(failed.length){const ev=document.getElementById('e-intake-verify');if(ev){ev.textContent=`Could not verify ${failed.length} CSV address${failed.length>1?'es':''}.`;ev.style.display='block';}}
+    renderIntakeSiteTags();
+  };
+  reader.readAsText(file);
+}
+
 // ── GRANTS CONFIG ─────────────────────────────────────────────
 // ┌─────────────────────────────────────────────────────────────────────────────┐
 // │  GRANT PROGRAMS — edit this object to add, update, or remove grants.        │
@@ -435,6 +568,7 @@ const S = {
   firstName: '', lastName: '', email: '',
   businessType: '',     // 'business-owner'|'cpo'|'distributor'|'vendor'|'other'
   siteAddress: '',
+  sites: [],             // multi-site array for P&L
   stalls: 4,
   budget: '',           // 'allocated'|'financed'
   battery: null,        // 'none'|'125kw'|'250kw'
@@ -558,8 +692,30 @@ const SLIDES = [
   { step:1, render:()=>`
     <div class="eyebrow">Project Intake</div>
     <h1>Tell us about your <em>project site</em>.</h1>
-    <div class="field"><label>Project site address (include city, state)</label><input type="text" style="border-style:solid;border-color:#F8B918;" id="siteAddress" placeholder="123 Main St, Seattle, WA" value="${S.siteAddress}" oninput="S.siteAddress=this.value"><div class="ferr" id="e-siteAddress">Required</div></div>
-    <div class="field" style="margin-bottom:22px;">
+    <div class="field">
+      <label>Site address(es) — include city and state</label>
+      <div style="position:relative;">
+        <input type="text" id="siteAddressInput" style="border-style:solid;border-color:#F8B918;"
+          placeholder="123 Main St, Seattle, WA" autocomplete="off"
+          oninput="onIntakeSiteInput(event)"
+          onkeydown="onIntakeSiteKeydown(event)"
+          onblur="setTimeout(()=>{const b=document.getElementById('intake-suggestions');if(b)b.innerHTML='';},150)">
+        <div id="intake-suggestions" style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--s2);border:1px solid var(--gold-border);border-radius:var(--r);z-index:200;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.4);"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+        <button id="intake-add-btn" class="btn btn-ghost" style="padding:7px 14px;font-size:0.82rem;" onmousedown="addIntakeSite()">+ Add</button>
+        <span style="font-size:0.78rem;color:var(--muted);font-family:var(--mono);">or press Enter · select from suggestions</span>
+      </div>
+      <div class="ferr" id="e-intake-verify" style="display:none;"></div>
+      <div class="ferr" id="e-siteAddress" style="display:none;">Please add at least one site address.</div>
+    </div>
+    <div class="upload-zone" onclick="document.getElementById('intake-csv-input').click()" style="margin-bottom:8px;">
+      <input type="file" id="intake-csv-input" accept=".csv,.txt" onchange="if(this.files[0])handleIntakeCSV(this.files[0])">
+      <span style="margin-right:6px;">📎</span> Import CSV — one address per row
+    </div>
+    <div id="intake-site-count" style="font-size:0.78rem;font-family:var(--mono);color:var(--gold);min-height:18px;margin-top:4px;"></div>
+    <div style="display:flex;flex-wrap:wrap;margin-top:6px;min-height:20px;" id="intake-site-tags"></div>
+    <div class="field" style="margin-bottom:22px;margin-top:20px;">
       <label>Estimated # of stalls</label>
       <div class="stall-display" id="stall-num">${S.stalls}</div>
       <input type="range" id="stall-range" min="1" max="32" value="${S.stalls}" oninput="S.stalls=+this.value;document.getElementById('stall-num').textContent=this.value;trackRange(this)">
@@ -583,12 +739,20 @@ const SLIDES = [
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
-  `, onEnter:()=>setTimeout(()=>{const r=document.getElementById('stall-range');if(r)trackRange(r);},60),
+  `, onEnter:()=>{setTimeout(()=>{const r=document.getElementById('stall-range');if(r)trackRange(r);},60);renderIntakeSiteTags();},
     valid:()=>{
       let ok=true;
-      const sa=document.getElementById('siteAddress'),esa=document.getElementById('e-siteAddress');
-      if(sa&&sa.value.trim()===''){sa.classList.add('inv');if(esa)esa.style.display='block';ok=false;}
-      else if(sa){sa.classList.remove('inv');if(esa)esa.style.display='none';}
+      const inp=document.getElementById('siteAddressInput');
+      const esa=document.getElementById('e-siteAddress');
+      const ev=document.getElementById('e-intake-verify');
+      // Block if user has typed but not committed an address
+      if(inp&&inp.value.trim()){
+        if(ev){ev.textContent='Please select an address from the suggestions before continuing.';ev.style.display='block';}
+        ok=false;
+      }
+      if(!S.sites.length){if(esa)esa.style.display='block';ok=false;}
+      else{if(esa)esa.style.display='none';if(ev&&!inp?.value.trim())ev.style.display='none';}
+      if(S.sites.length&&!S.siteAddress)S.siteAddress=S.sites[0];
       if(!S.budget){document.getElementById('e-budget').style.display='block';ok=false;}
       else document.getElementById('e-budget').style.display='none';
       return ok;
@@ -978,7 +1142,7 @@ async function submitToHubSpot() {
     firstname:            S.firstName,
     lastname:             S.lastName,
     business_type:        bizMap[S.businessType] || S.businessType,
-    location_of_interest: S.siteAddress,
+    location_of_interest: (S.sites&&S.sites.length ? S.sites.join('; ') : S.siteAddress) || '',
     number_of_stalls:     String(S.stalls),
     cpq_test_why_install_ev_charging: S.reasons.map(r => reasonMap[r] || r).join(';'),
     cpq_test_budget:                  budgetMap[S.budget] || S.budget,
@@ -990,7 +1154,7 @@ async function submitToHubSpot() {
   // ── Deal properties ───────────────────────────────────────────────────────
   // Pipeline: "CPQ Test" (875089784), Stage: "Identified" (1128525596)
   const dealProperties = {
-    dealname:                    `${S.firstName} ${S.lastName} — ${S.siteAddress}`,
+    dealname:                    `${S.firstName} ${S.lastName} — ${S.sites&&S.sites.length?S.sites.join(', '):S.siteAddress}`,
     pipeline:                    '772342789',  // Site Opportunity
     dealstage:                   '1128525596',  // Identified
     amount:                      String(pricing.subtotal),
@@ -1004,7 +1168,7 @@ async function submitToHubSpot() {
     cpq_quote:                       S.quoteId,
     cpq_ideal_completion_date:       calcCompletionDate(),
     cpq_calculated_start_date:       calcProjectStartDate(),
-    cpq_site_address:             S.siteAddress,
+    cpq_site_address:             (S.sites&&S.sites.length ? S.sites.join('; ') : S.siteAddress) || '',
   };
 
   // ── Grant fields ──────────────────────────────────────────────────────────
@@ -1137,7 +1301,7 @@ function renderQuote(){
         <div class="q-info-card"><div class="qi-label">Contact</div><div class="qi-val">${S.firstName} ${S.lastName}</div></div>
         <div class="q-info-card"><div class="qi-label">Email</div><div class="qi-val">${S.email}</div></div>
         <div class="q-info-card"><div class="qi-label">Business Type</div><div class="qi-val">${bizLabel}</div></div>
-        <div class="q-info-card"><div class="qi-label">Site Address</div><div class="qi-val">${S.siteAddress||'—'}</div></div>
+        <div class="q-info-card"><div class="qi-label">Site${S.sites&&S.sites.length>1?'s':''}</div><div class="qi-val">${S.sites&&S.sites.length?S.sites.join(' · '):(S.siteAddress||'—')}</div></div>
         <div class="q-info-card"><div class="qi-label">Primary Reasons</div><div class="qi-val">${S.reasons.map(r=>rLabels[r]).join(', ')||'—'}</div></div>
         <div class="q-info-card"><div class="qi-label">Budget Approach</div><div class="qi-val">${budgetLabel}</div></div>
         <div class="q-info-card"><div class="qi-label">Target Completion</div><div class="qi-val">${startLabel}</div></div>
@@ -1341,10 +1505,11 @@ function restart(){
   // Re-detect grant from URL param on restart so campaign links stay active
   const urlGrant = new URLSearchParams(window.location.search).get('grant');
   const grantOnRestart = (urlGrant && GRANTS[urlGrant]) ? urlGrant : '';
-  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',stalls:4,budget:'',battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
+  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',sites:[],stalls:4,budget:'',battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
   // Clear hash without triggering the hashchange listener
   window.removeEventListener('hashchange', onHashChange);
   document.getElementById('pl-page').classList.remove('on');
+  document.body.classList.remove('pl-active');
   window.location.hash='';
   setTimeout(()=>window.addEventListener('hashchange', onHashChange), 100);
   // Wipe the stage synchronously so no stale slides linger
@@ -1964,7 +2129,63 @@ function plUpdateBatteryRow() {
 }
 
 // ── HEX LOOKUP FOR P&L ──────────────────────────────────────
-// Uses the same HEX_LOOKUP already loaded by the intake app
+// Self-contained hex data loader + robust nearest-hexagon lookup.
+// Fetches from the same source as the standalone P&L tool.
+let _plHexData = null;
+let _plHexLoading = null;
+
+async function loadPLHexData() {
+  if (_plHexData) return _plHexData;
+  if (_plHexLoading) return _plHexLoading;
+  _plHexLoading = (async () => {
+    try {
+      const resp = await fetch('https://raw.githubusercontent.com/jordanmcon/ev-project-intake/caas/hexagon_lookup.json');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const json = await resp.json();
+      if (!json?.hexagons?.length) throw new Error('Invalid structure');
+      _plHexData = json;
+      // Pre-build lookup map
+      _plHexData._hexSet = new Set(json.hexagons.map(h => h.hex_id));
+      _plHexData._hexMap  = new Map(json.hexagons.map(h => [h.hex_id, h]));
+      return _plHexData;
+    } catch(e) {
+      console.warn('P&L hex load failed:', e.message);
+      _plHexData = null;
+      _plHexLoading = null;
+      return null;
+    }
+  })();
+  return _plHexLoading;
+}
+
+function findPLHexagon(lat, lon) {
+  if (!_plHexData?.hexagons) return null;
+  const sampleRes = h3.getResolution(_plHexData.hexagons[0].hex_id);
+  const cellId = h3.latLngToCell(lat, lon, sampleRes);
+  if (_plHexData._hexSet.has(cellId)) {
+    return _plHexData._hexMap.get(cellId);
+  }
+  return null;
+}
+
+function parsePLState(displayName) {
+  const US_STATES = ['alabama','alaska','arizona','arkansas','california','colorado','connecticut',
+    'delaware','florida','georgia','hawaii','idaho','illinois','indiana','iowa','kansas','kentucky',
+    'louisiana','maine','maryland','massachusetts','michigan','minnesota','mississippi','missouri',
+    'montana','nebraska','nevada','new hampshire','new jersey','new mexico','new york',
+    'north carolina','north dakota','ohio','oklahoma','oregon','pennsylvania','rhode island',
+    'south carolina','south dakota','tennessee','texas','utah','vermont','virginia','washington',
+    'west virginia','wisconsin','wyoming'];
+  const parts = displayName.split(',').map(s => s.trim());
+  const usIdx = parts.findIndex(p => /united states/i.test(p));
+  if (usIdx > 0) {
+    for (let i = usIdx - 1; i >= 0; i--) {
+      if (US_STATES.includes(parts[i].toLowerCase())) return parts[i];
+    }
+  }
+  return '';
+}
+
 async function lookupSPDForPL(address) {
   try {
     const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address);
@@ -1973,25 +2194,22 @@ async function lookupSPDForPL(address) {
     if (!data || !data.length) return null;
     const lat = parseFloat(data[0].lat);
     const lon = parseFloat(data[0].lon);
+    const displayName = data[0].display_name;
 
-    // Parse state for LCFS
-    const US_STATES = ['washington','oregon','california','wa','or','ca'];
-    const parts = data[0].display_name.split(',').map(s => s.trim());
-    const usIdx = parts.findIndex(p => /united states/i.test(p));
-    PL.lastState = '';
-    if (usIdx > 0) {
-      for (let i = usIdx - 1; i >= 0; i--) {
-        if (US_STATES.includes(parts[i].toLowerCase())) { PL.lastState = parts[i]; break; }
+    const state = parsePLState(displayName);
+
+    const hexData = await loadPLHexData();
+    if (hexData) {
+      const hex = findPLHexagon(lat, lon);
+      if (hex) {
+        return {
+          spd: Math.max(5, Math.min(100, Math.round(hex.daily_sessions))),
+          lat, lon, displayName, state,
+          hexId: hex.hex_id
+        };
       }
     }
-
-    // H3 lookup — use existing HEX_LOOKUP if available
-    if (typeof HEX_LOOKUP !== 'undefined' && HEX_LOOKUP && Object.keys(HEX_LOOKUP).length) {
-      const hexId = h3.latLngToCell(lat, lon, 6);
-      const spd = HEX_LOOKUP[hexId] ?? null;
-      return { spd: spd !== null ? Math.max(5, Math.min(100, Math.round(spd))) : null, lat, lon, displayName: data[0].display_name };
-    }
-    return { spd: null, lat, lon, displayName: data[0].display_name };
+    return { spd: null, lat, lon, displayName, state };
   } catch(e) {
     return null;
   }
@@ -2051,22 +2269,25 @@ function renderSessionChart(spd) {
 async function showPLPage() {
   // Transition to P&L page
   document.getElementById('quote-page').classList.remove('on');
+  document.body.classList.add('pl-active');
   const plPage = document.getElementById('pl-page');
   plPage.classList.add('on');
-  plPage.scrollTop = 0;
+  window.scrollTo(0, 0);
   window.location.hash = 'pl';
 
   const wrap = document.getElementById('pl-wrap');
   wrap.innerHTML = renderPLShell();
   wirePLSliders();
 
-  // Determine sites to look up
-  const sites = (typeof S !== 'undefined' && S.siteAddress) ? [S.siteAddress] : [];
+  // Collect all sites — prefer S.sites array, fall back to S.siteAddress
+  const sites = (typeof S !== 'undefined' && S.sites && S.sites.length)
+    ? S.sites
+    : (S && S.siteAddress ? [S.siteAddress] : []);
 
   if (!sites.length) {
-    // No address — just show P&L with default SPD
     PL.spd = 20;
     PL.siteAddress = 'Custom Site';
+    PL.allSiteResults = [];
     finalizePLPage(null);
     return;
   }
@@ -2075,27 +2296,39 @@ async function showPLPage() {
   const loadingEl = document.getElementById('pl-loading');
   if (loadingEl) loadingEl.style.display = 'flex';
 
-  // Geocode + hex lookup
-  const result = await lookupSPDForPL(sites[0]);
+  // Geocode + hex lookup for ALL sites (rate-limited)
+  const siteResults = [];
+  for (const addr of sites) {
+    const result = await lookupSPDForPL(addr);
+    siteResults.push({ address: addr, result });
+    await new Promise(r => setTimeout(r, 250));
+  }
   if (loadingEl) loadingEl.style.display = 'none';
 
-  if (result && result.spd !== null) {
-    PL.spd = result.spd;
-    PL.siteAddress = sites[0];
-    finalizePLPage(result);
-  } else {
-    PL.spd = 20;
-    PL.siteAddress = sites[0];
-    finalizePLPage(result);
-  }
+  // Compute portfolio-level SPD: sum across all sites with data; default 20/site otherwise
+  PL.allSiteResults = siteResults;
+  const totalSPD = siteResults.reduce((sum, s) => {
+    return sum + (s.result && s.result.spd !== null ? s.result.spd : 20);
+  }, 0);
+  const foundCount = siteResults.filter(s => s.result && s.result.spd !== null).length;
+
+  PL.spd = Math.max(5, Math.min(100 * sites.length, totalSPD));
+  PL.siteAddress = sites.length === 1 ? sites[0] : sites.length + '-Site Portfolio';
+
+  // Use first geocoded result for map + state
+  const firstGeo = siteResults.find(s => s.result && s.result.lat)?.result || null;
+  if (firstGeo) PL.lastState = firstGeo.state || '';
+
+  finalizePLPage(firstGeo, siteResults, foundCount);
 }
 
-function finalizePLPage(geoResult) {
-  // Update stat cards
+function finalizePLPage(geoResult, siteResults, foundCount) {
   const SESSION_GROWTH_RATE = 0.10;
   const spd = PL.spd;
   const yr1 = Math.round(spd * 365);
   const yr10 = Math.round(spd * 365 * Math.pow(1 + SESSION_GROWTH_RATE, 9));
+  const sites = siteResults || [];
+  const isPortfolio = sites.length > 1;
 
   const spdEl = document.getElementById('pl-stat-spd');
   const yr1El = document.getElementById('pl-stat-yr1');
@@ -2103,13 +2336,45 @@ function finalizePLPage(geoResult) {
   const siteEl = document.getElementById('pl-site-label');
   const noDataBanner = document.getElementById('pl-no-data-banner');
 
-  if (spdEl) spdEl.textContent = spd;
+  if (spdEl) spdEl.textContent = spd + (isPortfolio ? ' total' : '');
   if (yr1El) yr1El.textContent = plFmtNum(yr1);
   if (yr10El) yr10El.textContent = plFmtNum(yr10);
   if (siteEl) siteEl.textContent = PL.siteAddress || 'Custom Site';
-  if (noDataBanner) noDataBanner.style.display = (geoResult && geoResult.spd !== null) ? 'none' : 'block';
 
-  // Map
+  // Show no-data banner if any sites had no data
+  const missingCount = sites.filter(s => !s.result || s.result.spd === null).length;
+  if (noDataBanner) {
+    if (missingCount > 0) {
+      noDataBanner.style.display = 'block';
+      noDataBanner.textContent = missingCount === sites.length
+        ? '⚠ No coverage data found — using 20 sessions/day per site as default. Adjust the SPD slider below.'
+        : `⚠ No coverage data for ${missingCount} of ${sites.length} sites — defaulting to 20 SPD for those. Total SPD shown is an estimate.`;
+    } else {
+      noDataBanner.style.display = 'none';
+    }
+  }
+
+  // Per-site SPD breakdown for portfolio
+  if (isPortfolio) {
+    const breakdown = document.getElementById('pl-site-breakdown');
+    if (breakdown) {
+      breakdown.style.display = 'block';
+      breakdown.innerHTML = '<div style="font-size:.78rem;font-family:var(--mono);color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em;">Portfolio — SPD by site</div>' +
+        sites.map(s => {
+          const siteSPD = (s.result && s.result.spd !== null) ? s.result.spd : 20;
+          const noData = !s.result || s.result.spd === null;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:.85rem;">
+            <span style="color:var(--dim);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:12px;">${s.address}</span>
+            <span style="font-family:var(--mono);color:${noData?'var(--muted)':'var(--gold)'};flex-shrink:0;">${siteSPD}${noData?' (est.)':''} SPD</span>
+          </div>`;
+        }).join('') +
+        `<div style="display:flex;justify-content:space-between;padding:8px 0 4px;font-size:.88rem;font-weight:600;">
+          <span>Total portfolio SPD</span><span style="font-family:var(--mono);color:var(--gold);">${spd}</span>
+        </div>`;
+    }
+  }
+
+  // Map (first site)
   if (geoResult && geoResult.lat) {
     renderPLMap(geoResult.lat, geoResult.lon, geoResult.displayName || PL.siteAddress);
   }
@@ -2117,20 +2382,25 @@ function finalizePLPage(geoResult) {
   // Session chart
   renderSessionChart(spd);
 
-  // Set SPD slider to forecast value
+  // Set SPD slider — clamp to slider max (100) for display, but use full portfolio SPD for math
+  const sliderMax = isPortfolio ? Math.min(spd, 100) : spd;
   const spdSlider = document.getElementById('sliderSPD');
   const spdVal = document.getElementById('valSPD');
-  if (spdSlider) { spdSlider.value = spd; if (spdVal) spdVal.textContent = spd; }
+  if (spdSlider) {
+    spdSlider.max = isPortfolio ? Math.max(100, spd * 1.5) : 100;
+    spdSlider.value = spd;
+    if (spdVal) spdVal.textContent = spd;
+  }
 
-  // Initial P&L render
   computeAndRenderPL();
 }
 
 function backToQuoteFromPL() {
   document.getElementById('pl-page').classList.remove('on');
+  document.body.classList.remove('pl-active');
   document.getElementById('quote-page').classList.add('on');
   window.location.hash = 'quote';
-  document.getElementById('quote-page').scrollTop = 0;
+  window.scrollTo(0, 0);
 }
 
 // ── P&L PAGE SHELL HTML ───────────────────────────────────────
@@ -2152,9 +2422,8 @@ function renderPLShell() {
       <div style="font-family:var(--mono);font-size:.82rem;color:var(--muted);">Looking up utilization data for your site…</div>
     </div>
 
-    <div id="pl-no-data-banner" style="display:none;background:rgba(248,185,24,.07);border:1px solid var(--gold-border);border-radius:var(--r);padding:14px 18px;margin-bottom:1.5rem;font-size:.88rem;color:var(--muted);">
-      ⚠ No coverage data found for this location — using a default of 20 sessions/day. Adjust the SPD slider below to model different utilization scenarios.
-    </div>
+    <div id="pl-no-data-banner" style="display:none;background:rgba(248,185,24,.07);border:1px solid var(--gold-border);border-radius:var(--r);padding:14px 18px;margin-bottom:1rem;font-size:.88rem;color:var(--muted);"></div>
+    <div id="pl-site-breakdown" style="display:none;background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:1.5rem;"></div>
 
     <!-- Forecast stats -->
     <div class="pl-stats-grid">
@@ -2200,7 +2469,7 @@ function renderPLShell() {
             <span class="pl-slider-value" id="valSPD">--</span>
           </div>
           <div class="pl-slider-desc">Baseline daily charging sessions (Year 1) — pre-filled from Paren data</div>
-          <input type="range" class="pl-range" id="sliderSPD" min="5" max="100" step="1" value="20">
+          <input type="range" class="pl-range" id="sliderSPD" min="5" max="100" step="1" value="20" oninput="this.max=Math.max(parseInt(this.max),parseInt(this.value));">
           <div class="pl-slider-range"><span>5</span><span>100</span></div>
         </div>
 
