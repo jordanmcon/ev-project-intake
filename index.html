@@ -666,12 +666,12 @@ async function renderCaaSQuote(qWrap) {
     <div class="q-sec">
       <div class="q-sec-title">What's included</div>
       <div class="inc-list">
-        ${[['Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.'],
+        ${[['✓ Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.'],
            ['✓ Full-term O&M (10 years): Preventative and corrective maintenance included.'],
            ['✓ HaloAI on-charger intelligence: Driver support, remote diagnostics, and retail experience features.'],
            ['✓ Network & connectivity: LTE, OCPP compliance, and cloud monitoring.'],
            ['✓ No upfront CapEx: Fixed monthly subscription — capital expenditure not required.'],
-          ].map(([t,s])=>`<div class="inc-item"<div><div class="inc-title">${t}</div><div class="inc-sub">${s}</div></div></div>`).join('')}
+          ].map(([t,s])=>`<div class="inc-item"<div><div class="inc-title">${t}</div></div></div>`).join('')}
       </div>
     </div>
 
@@ -3046,16 +3046,18 @@ async function loadAndFinalizeCaaSPL() {
   const yr1  = Math.round(spd * 365);
   // Avg lifetime utilization: average (sessions/year across 10 years) / max potential sessions/year
   const maxSessionsPerDay = S.caasProduct === 're400' ? 30 : 16; // RE400: 30/stall/day, Base: 16/stall/day
-  const maxSessionsPerYear = maxSessionsPerDay * S.stalls * 365;
+  const numSites = sites.length || 1;
+  const maxSessionsPerYear = maxSessionsPerDay * S.stalls * numSites * 365;
   let totalSessions10yr = 0;
   for (let y = 1; y <= 10; y++) {
     totalSessions10yr += spd * 365 * Math.pow(1.10, y - 1);
   }
   const avgSessionsPerYear = totalSessions10yr / 10;
-  const avgUtilization = Math.min(100, (avgSessionsPerYear / maxSessionsPerYear) * 100);
+  const avgUtilization = (maxSessionsPerYear > 0) ? Math.min(100, (avgSessionsPerYear / maxSessionsPerYear) * 100) : 0;
+  console.log('[CaaS Util] product:', S.caasProduct, 'stalls:', S.stalls, 'spd:', spd, 'maxSpd/stall:', maxSessionsPerDay, 'maxSessions/yr:', maxSessionsPerYear, 'avgUtil:', avgUtilization);
   const spdEl  = document.getElementById('caas-stat-spd');  if(spdEl)  spdEl.textContent  = spd+(sites.length>1?' total':'');
   const yr1El  = document.getElementById('caas-stat-yr1');  if(yr1El)  yr1El.textContent  = plFmtNum(yr1);
-  const utilEl = document.getElementById('caas-stat-util'); if(utilEl) utilEl.textContent = avgUtilization.toFixed(1)+'%';
+  const utilEl = document.getElementById('caas-stat-util'); if(utilEl) utilEl.textContent = isNaN(avgUtilization) ? 'N/A' : avgUtilization.toFixed(1)+'%';
   const siteEl = document.getElementById('caas-site-label');
   if (siteEl) siteEl.textContent = PL.siteAddress;
 
