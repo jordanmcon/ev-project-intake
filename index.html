@@ -384,18 +384,17 @@ body.pl-active #pl-page{display:block;overflow-y:auto;height:auto}
 // Nominatim autocomplete + verification, US-only
 let _iAcTimer = null, _iAcActive = -1, _iAcResults = [], _iAcAbort = null;
 
-function _iNominatimUrl(params) {
-  return 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=us&accept-language=en&' +
-    Object.entries(params).map(([k,v]) => k+'='+encodeURIComponent(v)).join('&');
+function _iPhotonUrl(query, limit=5) {
+  return 'https://photon.komoot.io/api/?limit='+limit+'&lang=en&q='+encodeURIComponent(query);
 }
-function _iBuildLabel(r) {
-  const a = r.address || {};
+function _iBuildLabel(props) {
   const parts = [
-    a.house_number && a.road ? a.house_number+' '+a.road : (a.road||null),
-    a.city||a.town||a.village||a.municipality||null,
-    a.state||null, a.postcode||null
+    props.housenumber && props.street ? props.housenumber+' '+props.street : (props.street||null),
+    props.city || props.town || props.village || null,
+    props.state || null,
+    props.postcode || null
   ].filter(Boolean);
-  return parts.length >= 2 ? parts.join(', ') : r.display_name;
+  return parts.length >= 2 ? parts.join(', ') : (props.name || '');
 }
 function renderIntakeSiteTags() {
   const wrap = document.getElementById('intake-site-tags'); if(!wrap) return;
@@ -426,11 +425,12 @@ async function _iFetchSuggestions(query) {
   const box = document.getElementById('intake-suggestions');
   if(box) box.innerHTML='<div style="padding:10px 14px;font-size:0.82rem;color:var(--muted);">Searching…</div>';
   try {
-    const url = _iNominatimUrl({q:query,limit:5,addressdetails:1});
-    const res = await fetch(url,{signal:_iAcAbort.signal,headers:{'Accept-Language':'en'}});
+    const url = _iPhotonUrl(query, 5);
+    const res = await fetch(url, {signal:_iAcAbort.signal});
     const data = await res.json();
-    const us = (data||[]).filter(r=>(r.address||{}).country_code==='us');
-    _iAcResults = us.map(r=>({label:_iBuildLabel(r),raw:r}));
+    // Filter to US results only
+    const us = (data?.features||[]).filter(f => f.properties?.countrycode === 'US');
+    _iAcResults = us.map(f => ({label: _iBuildLabel(f.properties), raw: f}));
     _iAcActive = -1;
     if(!_iAcResults.length){if(box)box.innerHTML='<div style="padding:10px 14px;font-size:0.82rem;color:#ff7070;">No US addresses found — try adding city and state</div>';return;}
     const esc=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -457,13 +457,14 @@ function onIntakeSiteKeydown(e) {
 }
 async function _iVerify(raw) {
   try {
-    const url=_iNominatimUrl({q:raw,limit:1,addressdetails:1});
-    const res=await fetch(url,{headers:{'Accept-Language':'en'}});
-    const data=await res.json();
-    if(!data||!data.length)return null;
-    if((data[0].address||{}).country_code!=='us')return null;
-    return _iBuildLabel(data[0]);
-  }catch(e){return null;}
+    const url = _iPhotonUrl(raw, 1);
+    const res = await fetch(url);
+    const data = await res.json();
+    const feature = data?.features?.[0];
+    if (!feature) return null;
+    if (feature.properties?.countrycode !== 'US') return null;
+    return _iBuildLabel(feature.properties);
+  } catch(e) { return null; }
 }
 async function addIntakeSite() {
   const inp=document.getElementById('siteAddressInput'); if(!inp) return;
@@ -558,16 +559,19 @@ function expandStateAbbr(address) {
 async function _geocodeWithRetry(address, retries=3, baseDelay=1200) {
   const expanded = expandStateAbbr(address);
   if (_geocodeCache[expanded]) return _geocodeCache[expanded];
-  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(expanded);
+  // Photon (Komoot) — CORS-enabled, OSM-backed, no API key required
+  const url = 'https://photon.komoot.io/api/?limit=1&lang=en&q='+encodeURIComponent(expanded);
   for (let attempt = 0; attempt < retries; attempt++) {
     if (attempt > 0) await new Promise(r => setTimeout(r, baseDelay * attempt * 2));
     try {
-      const res = await fetch(url, {headers:{'Accept-Language':'en'}});
+      const res = await fetch(url);
       if (res.status === 429) { continue; }
       if (!res.ok) return null;
       const data = await res.json();
-      if (!data?.length) return null;
-      const result = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      const feature = data?.features?.[0];
+      if (!feature) return null;
+      const [lon, lat] = feature.geometry.coordinates;
+      const result = { lat, lon };
       _geocodeCache[expanded] = result;
       return result;
     } catch(e) { if (attempt === retries-1) return null; }
@@ -2520,15 +2524,20 @@ function parsePLState(displayName) {
 
 async function lookupSPDForPL(address) {
   try {
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address);
-    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const expanded = expandStateAbbr(address);
+    const url = 'https://photon.komoot.io/api/?limit=1&lang=en&q=' + encodeURIComponent(expanded);
+    const res = await fetch(url);
     const data = await res.json();
-    if (!data || !data.length) return null;
-    const lat = parseFloat(data[0].lat);
-    const lon = parseFloat(data[0].lon);
-    const displayName = data[0].display_name;
-
-    const state = parsePLState(displayName);
+    const feature = data?.features?.[0];
+    if (!feature) return null;
+    const [lon, lat] = feature.geometry.coordinates;
+    const displayName = [
+      feature.properties.name,
+      feature.properties.city || feature.properties.town,
+      feature.properties.state,
+      feature.properties.postcode
+    ].filter(Boolean).join(', ');
+    const state = feature.properties.state || '';
 
     const hexData = await loadPLHexData();
     if (hexData) {
