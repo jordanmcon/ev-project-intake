@@ -2671,7 +2671,7 @@ function finalizePLPage(geoResult, siteResults, foundCount) {
           </div>`;
         }).join('') +
         `<div style="display:flex;justify-content:space-between;padding:8px 0 4px;font-size:.88rem;font-weight:600;">
-          <span>Total portfolio SPD</span><span style="font-family:var(--mono);color:var(--gold);">${spd}</span>
+          <span>Total estimated portfolio SPD (Year 1)</span><span style="font-family:var(--mono);color:var(--gold);">${spd}</span>
         </div>`;
     }
   }
@@ -2738,7 +2738,7 @@ function renderPLShell() {
       <div class="pl-stat-card">
         <div class="pl-stat-label">Sessions / Day</div>
         <div class="pl-stat-value gold" id="pl-stat-spd">--</div>
-        <div class="pl-stat-sub">Year 1 baseline from Paren data</div>
+        <div class="pl-stat-sub">Year 1 baseline from Paren EV sessions data</div>
       </div>
       <div class="pl-stat-card">
         <div class="pl-stat-label">Year 1 Sessions</div>
@@ -2827,8 +2827,8 @@ function renderPLShell() {
     <!-- CapEx from quote — read-only -->
     <div class="pl-card" id="pl-capex-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-        <div class="pl-card-title" style="margin-bottom:0;">Upfront CapEx</div>
-        <span style="font-size:.75rem;font-family:var(--mono);color:var(--muted);">Sourced from your quote · <button onclick="goBackFromPLToQuote()" style="background:none;border:none;color:var(--gold);cursor:pointer;font-family:var(--mono);font-size:.75rem;padding:0;">edit ↗</button></span>
+        <div class="pl-card-title" style="margin-bottom:0;">Upfront CapEx (sourced from your quote)</div>
+        <span style="font-size:.75rem;font-family:var(--mono);color:var(--muted);"> <button onclick="goBackFromPLToQuote()" style="background:none;border:none;color:var(--gold);cursor:pointer;font-family:var(--mono);font-size:.75rem;padding:0;">edit ↗</button></span>
       </div>
       <div id="pl-capex-breakdown" style="display:flex;flex-direction:column;gap:6px;"></div>
       <div style="display:flex;justify-content:space-between;padding:10px 0 4px;border-top:1px solid var(--gold-border);margin-top:10px;font-weight:600;">
