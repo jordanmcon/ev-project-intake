@@ -2661,8 +2661,10 @@ function finalizePLPage(geoResult, siteResults, foundCount) {
     }
   }
 
-  // Map (first site)
-  if (geoResult && geoResult.lat) {
+  // Map — only show for single site
+  const plMapCard = document.getElementById('pl-map-card');
+  if (plMapCard) plMapCard.style.display = (!isPortfolio && geoResult && geoResult.lat) ? 'block' : 'none';
+  if (!isPortfolio && geoResult && geoResult.lat) {
     renderPLMap(geoResult.lat, geoResult.lon, geoResult.displayName || PL.siteAddress);
   }
 
@@ -2732,7 +2734,7 @@ function renderPLShell() {
     </div>
 
     <!-- Map -->
-    <div class="pl-card">
+    <div class="pl-card" id="pl-map-card">
       <div class="pl-card-title">Site Location</div>
       <div id="pl-map" style="height:320px;border-radius:8px;overflow:hidden;background:var(--s3);"></div>
       <p style="margin-top:.75rem;font-size:.78rem;color:var(--muted);" id="pl-map-address"></p>
@@ -3031,23 +3033,20 @@ async function loadAndFinalizeCaaSPL() {
   // Update stat cards
   const yr1  = Math.round(spd * 365);
   const yr10 = Math.round(spd * 365 * Math.pow(1.10, 9));
-  document.getElementById('caas-stat-spd')?.  (el => el && (el.textContent = spd+(sites.length>1?' total':'')));
-  document.getElementById('caas-stat-yr1')?.  (el => el && (el.textContent = plFmtNum(yr1)));
-  document.getElementById('caas-stat-yr10')?.  (el => el && (el.textContent = plFmtNum(yr10)));
-  const siteEl = document.getElementById('caas-site-label');
-  if (siteEl) siteEl.textContent = PL.siteAddress;
-
-  // Fix these with direct getElementById
   const spdEl  = document.getElementById('caas-stat-spd');  if(spdEl)  spdEl.textContent  = spd+(sites.length>1?' total':'');
   const yr1El  = document.getElementById('caas-stat-yr1');  if(yr1El)  yr1El.textContent  = plFmtNum(yr1);
   const yr10El = document.getElementById('caas-stat-yr10'); if(yr10El) yr10El.textContent = plFmtNum(yr10);
+  const siteEl = document.getElementById('caas-site-label');
+  if (siteEl) siteEl.textContent = PL.siteAddress;
 
   // Set sliders
   const spdSlider = document.getElementById('caas-sliderSPD');
   if (spdSlider) { spdSlider.max = Math.max(100, spd*1.5); spdSlider.value = spd; }
 
-  // Map
-  if (firstGeo) renderPLMap(firstGeo.lat, firstGeo.lon, sites[0]);
+  // Map — only show for single site
+  const mapCard = document.getElementById('caas-map-card');
+  if (mapCard) mapCard.style.display = sites.length === 1 ? 'block' : 'none';
+  if (sites.length === 1 && firstGeo) renderPLMap(firstGeo.lat, firstGeo.lon, sites[0]);
 
   computeAndRenderCaaSPL();
 }
@@ -3092,7 +3091,7 @@ function renderCaaSPLShell() {
     </div>
 
     <!-- Site map -->
-    <div class="pl-card">
+    <div class="pl-card" id="caas-map-card">
       <div class="pl-card-title">Site Location</div>
       <div id="pl-map" style="height:280px;border-radius:8px;overflow:hidden;background:var(--s3);"></div>
     </div>
