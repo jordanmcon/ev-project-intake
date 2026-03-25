@@ -707,7 +707,7 @@ async function renderCaaSQuote(qWrap) {
     <div class="q-sec">
       <div class="q-sec-title">What's included</div>
       <div class="inc-list">
-        ${[['Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.'],
+        ${[['✓ Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.'],
            ['✓ Full-term O&M (10 years): Preventative and corrective maintenance included.'],
            ['✓ HaloAI on-charger intelligence: Driver support, remote diagnostics, and retail experience features.'],
            ['✓ Network & connectivity: LTE, OCPP compliance, and cloud monitoring.'],
@@ -1022,7 +1022,7 @@ const SLIDES = [
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
-  `, valid:()=>{ if(!S.caasProduct){toast('Please select a charger model.');return false;} return true; }},
+  `, valid:()=>{ if(!S.caasProduct){toast('Please select a product.');return false;} return true; }},
 
   // ── CaaS: SUMMARY (slide 5) ──────────────────────────────────
   { step:3, isCaaS:true, render:()=>{
