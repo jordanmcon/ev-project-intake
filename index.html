@@ -2105,9 +2105,6 @@ function fmtSliderVal(id, val) {
         case 'sliderSPD': return String(val);
         case 'sliderChargingPrice': return '$' + parseFloat(val).toFixed(2);
         case 'sliderElecPrice': return '$' + parseFloat(val).toFixed(2);
-        case 'sliderHardware':
-        case 'sliderConstruction':
-            return '$' + Math.round(val/1000) + 'k';
         case 'sliderDemandRate':
             return '$' + parseFloat(val).toFixed(2);
     }
@@ -2150,15 +2147,41 @@ function computeAndRenderPL() {
     const spd = parseInt(document.getElementById('sliderSPD').value);
     const chargingPrice = parseFloat(document.getElementById('sliderChargingPrice').value);
     const elecCost = parseFloat(document.getElementById('sliderElecPrice').value);
-    const hardwareCost = parseFloat(document.getElementById('sliderHardware').value);
-    const designCost = 71500; // Fixed: Design & EPC
-    const constructionCost = parseFloat(document.getElementById('sliderConstruction').value);
     const demandRate = parseFloat(document.getElementById('sliderDemandRate').value);
 
+    // CapEx from quote (always re-read so edits on quote page auto-update)
+    const _p = calcPricing();
+    const hardwareCost    = _p.hardware;
+    const batteryCostQ    = _p.batteryPrice;   // battery from quote
+    const designCost      = _p.design + _p.epc; // Design + EPC add-ons
+    const constructionCost = _p.construction;
+
+    // Battery via demand checkbox overrides quote battery cost
     const battInfo = PL.plBatterySelected ? getBatteryCost() : null;
-    const batteryCost = battInfo ? battInfo.cost : 0;
-    const batteryLabel = battInfo ? battInfo.label : '';
+    const batteryCost = battInfo ? battInfo.cost : batteryCostQ;
+    const batteryLabel = battInfo ? battInfo.label : ({125000:'125 kW Battery',186000:'250 kW Battery'}[batteryCostQ]||'');
     const includeLCFS = isLCFSState();
+
+    // Update CapEx breakdown card
+    const breakdownEl = document.getElementById('pl-capex-breakdown');
+    const totalEl = document.getElementById('pl-capex-total');
+    if (breakdownEl) {
+      const rows = [
+        ['Hardware', _p.hardware],
+        ...(batteryCostQ > 0 ? [['Battery ('+(batteryLabel||'from quote')+')', batteryCostQ]] : []),
+        ...(_p.design  > 0 ? [['Design Services', _p.design]] : []),
+        ...(_p.epc     > 0 ? [['EPC Management', _p.epc]] : []),
+        ...(_p.construction > 0 ? [['Construction', _p.construction]] : []),
+      ];
+      const totalCapExDisplay = rows.reduce((a,[,v])=>a+v,0) + (battInfo ? battInfo.cost - batteryCostQ : 0);
+      breakdownEl.innerHTML = rows.map(([label, val]) =>
+        `<div style="display:flex;justify-content:space-between;font-size:.85rem;padding:4px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--dim);">${label}</span>
+          <span style="font-family:var(--mono);">$${Math.round(val).toLocaleString('en-US')}</span>
+        </div>`
+      ).join('');
+      if (totalEl) totalEl.textContent = '$'+Math.round(totalCapExDisplay).toLocaleString('en-US');
+    }
 
     const result = computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, true, includeLCFS);
     const { years, totalCapEx, irr, breakeven, utilityUpgradeCost } = result;
@@ -2238,7 +2261,7 @@ function computeAndRenderPL() {
 
     // CapEx rows — itemised
     html += sectionRow('CAPEX');
-    html += row('Hardware (Electric Era RE400 Station)', years.map((y,i) => i === 0 ? -hardwareCost : 0));
+    html += row('Hardware ('+S.stalls+'-stall station)', years.map((y,i) => i === 0 ? -hardwareCost : 0));
     if (batteryCost > 0) {
         html += row(batteryLabel, years.map((y,i) => i === 0 ? -batteryCost : 0));
     }
@@ -2378,8 +2401,8 @@ function exportToXlsx() {
 
 // ── SLIDER WIRING ─────────────────────────────────────────────
 function wirePLSliders() {
-  const sliderIds = ['sliderSPD','sliderChargingPrice','sliderElecPrice','sliderHardware','sliderConstruction','sliderDemandRate'];
-  const valMap = { sliderSPD:'valSPD', sliderChargingPrice:'valChargingPrice', sliderElecPrice:'valElecPrice', sliderHardware:'valHardware', sliderConstruction:'valConstruction', sliderDemandRate:'valDemandRate' };
+  const sliderIds = ['sliderSPD','sliderChargingPrice','sliderElecPrice','sliderDemandRate'];
+  const valMap = { sliderSPD:'valSPD', sliderChargingPrice:'valChargingPrice', sliderElecPrice:'valElecPrice', sliderDemandRate:'valDemandRate' };
   sliderIds.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -2684,6 +2707,10 @@ function finalizePLPage(geoResult, siteResults, foundCount) {
   computeAndRenderPL();
 }
 
+function goBackFromPLToQuote() {
+  // Go back to quote page and then to the summary slide when user wants to edit CapEx
+  backToQuoteFromPL();
+}
 function backToQuoteFromPL() {
   document.getElementById('pl-page').classList.remove('on');
   document.body.classList.remove('pl-active');
@@ -2802,26 +2829,19 @@ function renderPLShell() {
           </div>
         </div>
 
-        <div class="pl-slider-group">
-          <div class="pl-slider-header">
-            <span class="pl-slider-label">Hardware Cost</span>
-            <span class="pl-slider-value" id="valHardware">$200k</span>
-          </div>
-          <div class="pl-slider-desc">Upfront hardware CapEx. A 4-port station costs about $200,000.</div>
-          <input type="range" class="pl-range" id="sliderHardware" min="100000" max="1000000" step="5000" value="200000">
-          <div class="pl-slider-range"><span>$100k</span><span>$1M</span></div>
-        </div>
+      </div>
+    </div>
 
-        <div class="pl-slider-group">
-          <div class="pl-slider-header">
-            <span class="pl-slider-label">Construction Cost</span>
-            <span class="pl-slider-value" id="valConstruction">$125k</span>
-          </div>
-          <div class="pl-slider-desc">Upfront construction CapEx. Can be significantly reduced if your site is already under construction.</div>
-          <input type="range" class="pl-range" id="sliderConstruction" min="80000" max="350000" step="5000" value="125000">
-          <div class="pl-slider-range"><span>$80k</span><span>$350k</span></div>
-        </div>
-
+    <!-- CapEx from quote — read-only -->
+    <div class="pl-card" id="pl-capex-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+        <div class="pl-card-title" style="margin-bottom:0;">Upfront CapEx</div>
+        <span style="font-size:.75rem;font-family:var(--mono);color:var(--muted);">Sourced from your quote · <button onclick="goBackFromPLToQuote()" style="background:none;border:none;color:var(--gold);cursor:pointer;font-family:var(--mono);font-size:.75rem;padding:0;">edit ↗</button></span>
+      </div>
+      <div id="pl-capex-breakdown" style="display:flex;flex-direction:column;gap:6px;"></div>
+      <div style="display:flex;justify-content:space-between;padding:10px 0 4px;border-top:1px solid var(--gold-border);margin-top:10px;font-weight:600;">
+        <span style="font-size:.9rem;">Total CapEx</span>
+        <span style="font-family:var(--mono);color:var(--gold);font-size:.9rem;" id="pl-capex-total">—</span>
       </div>
     </div>
 
