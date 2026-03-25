@@ -634,11 +634,6 @@ async function renderCaaSQuote(qWrap) {
         <div style="font-size:.95rem;color:var(--dim);margin-top:6px;">per month · fixed for 10-year term${isPortfolio?' · '+n+' sites':''}${anyCapped?' · indicative minimum':''}</div>
         <div style="font-size:.78rem;font-family:var(--mono);color:var(--muted);margin-top:5px;">${fmtFee(portAnnual,anyCapped)}/yr · ${fmtFee(port10yr,anyCapped)} over full term</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr${isPortfolio?' 1fr':''};gap:8px;margin-bottom:10px;">
-        ${isPortfolio?`<div class="metric-card"><div class="metric-label">Per-site monthly</div><div class="metric-val">${fmtFee(siteResults[0].fee.monthly,siteResults[0].fee.capped)}</div><div class="metric-sub">${fmtFee(siteResults[0].fee.annual,siteResults[0].fee.capped)}/yr per site</div></div>`:''}
-        <div class="metric-card"><div class="metric-label">${isPortfolio?'Portfolio annual':'Annual fee'}</div><div class="metric-val">${fmtFee(portAnnual,anyCapped)}</div><div class="metric-sub">${fmtFee(port10yr,anyCapped)} over 10 years</div></div>
-        <div class="metric-card"><div class="metric-label">Contract term</div><div class="metric-val">10 years</div><div class="metric-sub">Fixed monthly, no CapEx</div></div>
-      </div>
     </div>
 
     ${isPortfolio?`
@@ -671,12 +666,12 @@ async function renderCaaSQuote(qWrap) {
     <div class="q-sec">
       <div class="q-sec-title">What's included</div>
       <div class="inc-list">
-        ${[['Hardware procurement & installation','Charger equipment, electrical, and permitting coordination.'],
-           ['Full-term O&M (10 years)','Preventative and corrective maintenance included.'],
-           ['HaloAI on-charger software','Driver support, remote diagnostics, and retail experience features.'],
-           ['Network & connectivity','LTE/WiFi, OCPP compliance, and cloud monitoring.'],
-           ['No upfront CapEx','Fixed monthly subscription — capital expenditure not required.'],
-          ].map(([t,s])=>`<div class="inc-item"><span class="inc-ck">✓</span><div><div class="inc-title">${t}</div><div class="inc-sub">${s}</div></div></div>`).join('')}
+        ${[['Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.'],
+           ['✓ Full-term O&M (10 years): Preventative and corrective maintenance included.'],
+           ['✓ HaloAI on-charger intelligence: Driver support, remote diagnostics, and retail experience features.'],
+           ['✓ Network & connectivity: LTE, OCPP compliance, and cloud monitoring.'],
+           ['✓ No upfront CapEx: Fixed monthly subscription — capital expenditure not required.'],
+          ].map(([t,s])=>`<div class="inc-item"<div><div class="inc-title">${t}</div><div class="inc-sub">${s}</div></div></div>`).join('')}
       </div>
     </div>
 
@@ -891,7 +886,7 @@ const SLIDES = [
   // 3 — SITE + STALLS + BUDGET
   { step:1, render:()=>`
     <div class="eyebrow">Project Intake</div>
-    <h1>Tell us about your <em>project site</em>.</h1>
+    <h1>Tell us about your <em>project site(s)</em>.</h1>
     <div class="field">
       <label>Site address(es) — include city and state</label>
       <div style="position:relative;">
@@ -918,8 +913,8 @@ const SLIDES = [
     <div class="field" style="margin-bottom:22px;margin-top:20px;">
       <label>Estimated # of stalls</label>
       <div class="stall-display" id="stall-num">${S.stalls}</div>
-      <input type="range" id="stall-range" min="1" max="32" value="${S.stalls}" oninput="S.stalls=+this.value;document.getElementById('stall-num').textContent=this.value;trackRange(this)">
-      <div class="range-labels"><span>1</span><span>8</span><span>16</span><span>24</span><span>32</span></div>
+      <input type="range" id="stall-range" min="2" max="18" value="${S.stalls}" oninput="S.stalls=+this.value;document.getElementById('stall-num').textContent=this.value;trackRange(this)">
+      <div class="range-labels"><span>2</span><span>6</span><span>10</span><span>14</span><span>18</span></div>
     </div>
     <div class="field">
       <label>Budget approach</label>
@@ -963,11 +958,11 @@ const SLIDES = [
   { step:2, isCaaS:true, render:()=>`
     <div class="eyebrow">CaaS Configuration</div>
     <h1>Which <em>charging product</em>?</h1>
-    <p class="sub">Your site(s) and stall count carry over. Just pick the charger model.</p>
+    <p class="sub">Your site(s) and stall count carry over. Just choose your product.</p>
     <div class="choices" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
       ${[
-        ['base',  'Base Station',  '200 kW / port', 'SK Signet FC200K — 4, 6, or 8 stall configs. Ideal for moderate demand charges.'],
-        ['re400', 'RE400',         '400 kW / port', 'Electric Era RE400 with HaloAI — up to 8 stalls. Built for high-traffic retail sites.'],
+        ['base',  'Base Station',  '200 kW / port', 'Electric Era Base Station — Reliable EV fast charging.'],
+        ['re400', 'RE400',         '400 kW / port', 'Electric Era RE400 with HaloAI — Intelligent, interactive, and immersive retail integration.'],
       ].map(([v,label,kw,desc],i)=>`
         <div class="choice ${S.caasProduct===v?'sel':''}" onclick="S.caasProduct='${v}';this.closest('.choices').querySelectorAll('.choice').forEach(el=>el.classList.remove('sel'));this.classList.add('sel');">
           <div class="ck">${String.fromCharCode(65+i)}</div>
@@ -1530,7 +1525,7 @@ function renderQuote(){
 
   const softwareDesc=activePrograms.length
     ?`${fmt(p.ratePerPort)}/port/year`
-    :'Standard charging software (no retail programs)';
+    :'Standard charging software and O&M';
 
   const addonRows=[
     S.addDesign?['Design Services','Survey, feasibility assessment, site design',fmt(p.design)]:null,
@@ -1667,14 +1662,8 @@ function renderQuote(){
       <li>Check your email inbox for a record of your quote</li>
       <li> Review the <a href="https://electricera.tech/terms-conditions" target="_blank" style="text-decoration: underline;color:var(--gold);">Terms and Conditions</a></li>
       <li>An Electric Era representative will reach out shortly to kick off a site assessment</li>
-      <li> An Electric Era engineer will be assigned to create a site layout</li>
-      <li> Explore:<a href="https://electricera.tech/app/p-l-generator" target="_blank" style="text-decoration: underline;color:var(--gold);"> Forecast charging sessions, growth, and ROI for your location </a> </li>
       <li> Explore:<a href="https://electricera.tech/app/retail-experience-value-calculator" target="_blank" style="text-decoration: underline;color:var(--gold);"> Calculate the value of extending your existing retail programs to EV charging </a> </li>
       </ul>
-    </div>
-
-    <div class="q-actions">
-      <button class="btn btn-ghost" onclick="restart()" style="font-size:1rem;color:var(--muted);">Start another project</button>
     </div>
   </div>
 
@@ -1684,6 +1673,9 @@ function renderQuote(){
       Generate a 10-Year P&amp;L
     </button>
   </div>
+      <div class="q-actions">
+      <button class="btn btn-ghost" onclick="restart()" style="font-size:1rem;color:var(--muted);">Start another project</button>
+    </div>
   <div class="q-disclaimer">This estimate is for planning purposes only and is not a binding offer. Final pricing is subject to site review.</div>
   `;
 }
@@ -2241,7 +2233,7 @@ function computeAndRenderPL() {
     html += row('Annual Sessions', years.map(y => y.annualSessions), '', fmtNum);
 
     // Revenue
-    html += sectionRow('REVENUE <span class="section-note">EV charging also drives incremental retail revenue—<a href="https://electricera.tech/app/retail-experience-value-calculator" target="_blank">find out how much</a></span>');
+    html += sectionRow('REVENUE <span class="section-note">EV charging also drives incremental retail revenue—<a href="https://electricera.tech/app/retail-experience-value-calculator" target="_blank" style="color:#F8B918;">find out how much</a></span>');
     html += row('Total Charging Revenue', years.map(y => y.grossChargingRevenue), 'subtotal');
     if (includeLCFS) {
         html += row('LCFS Credits', years.map(() => 20000));
