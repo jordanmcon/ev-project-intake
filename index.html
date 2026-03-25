@@ -3044,10 +3044,18 @@ async function loadAndFinalizeCaaSPL() {
 
   // Update stat cards
   const yr1  = Math.round(spd * 365);
-  const yr10 = Math.round(spd * 365 * Math.pow(1.10, 9));
+  // Avg lifetime utilization: average (sessions/year across 10 years) / max potential sessions/year
+  const maxSessionsPerDay = S.caasProduct === 're400' ? 30 : 16; // RE400: 30/stall/day, Base: 16/stall/day
+  const maxSessionsPerYear = maxSessionsPerDay * S.stalls * 365;
+  let totalSessions10yr = 0;
+  for (let y = 1; y <= 10; y++) {
+    totalSessions10yr += spd * 365 * Math.pow(1.10, y - 1);
+  }
+  const avgSessionsPerYear = totalSessions10yr / 10;
+  const avgUtilization = Math.min(100, (avgSessionsPerYear / maxSessionsPerYear) * 100);
   const spdEl  = document.getElementById('caas-stat-spd');  if(spdEl)  spdEl.textContent  = spd+(sites.length>1?' total':'');
   const yr1El  = document.getElementById('caas-stat-yr1');  if(yr1El)  yr1El.textContent  = plFmtNum(yr1);
-  const yr10El = document.getElementById('caas-stat-yr10'); if(yr10El) yr10El.textContent = plFmtNum(yr10);
+  const utilEl = document.getElementById('caas-stat-util'); if(utilEl) utilEl.textContent = avgUtilization.toFixed(1)+'%';
   const siteEl = document.getElementById('caas-site-label');
   if (siteEl) siteEl.textContent = PL.siteAddress;
 
@@ -3088,7 +3096,7 @@ function renderCaaSPLShell() {
     <div class="pl-stats-grid">
       <div class="pl-stat-card"><div class="pl-stat-label">Sessions / Day</div><div class="pl-stat-value gold" id="caas-stat-spd">--</div><div class="pl-stat-sub">Year 1 (from Paren data)</div></div>
       <div class="pl-stat-card"><div class="pl-stat-label">Year 1 Sessions</div><div class="pl-stat-value" id="caas-stat-yr1">--</div><div class="pl-stat-sub">Annual total</div></div>
-      <div class="pl-stat-card"><div class="pl-stat-label">Year 10 Sessions</div><div class="pl-stat-value" id="caas-stat-yr10">--</div><div class="pl-stat-sub">10% annual growth</div></div>
+      <div class="pl-stat-card"><div class="pl-stat-label">Avg Lifetime Utilization</div><div class="pl-stat-value" id="caas-stat-util">--</div><div class="pl-stat-sub">Avg across 10 yrs (10% YoY growth)</div></div>
     </div>
 
     <!-- Context card -->
