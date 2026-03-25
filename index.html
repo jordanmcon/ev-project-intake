@@ -535,13 +535,50 @@ function fmtFee(n, capped) { return '$'+Math.round(n).toLocaleString('en-US')+(c
 function fmtC(n) { return '$'+Math.round(n).toLocaleString('en-US'); }
 
 // Hex lookup for CaaS (reuses P&L hex data loader)
+const _geocodeCache = {};
+const _stateAbbr = {
+  'AL':'Alabama','AK':'Alaska','AZ':'Arizona','AR':'Arkansas','CA':'California',
+  'CO':'Colorado','CT':'Connecticut','DE':'Delaware','FL':'Florida','GA':'Georgia',
+  'HI':'Hawaii','ID':'Idaho','IL':'Illinois','IN':'Indiana','IA':'Iowa',
+  'KS':'Kansas','KY':'Kentucky','LA':'Louisiana','ME':'Maine','MD':'Maryland',
+  'MA':'Massachusetts','MI':'Michigan','MN':'Minnesota','MS':'Mississippi','MO':'Missouri',
+  'MT':'Montana','NE':'Nebraska','NV':'Nevada','NH':'New Hampshire','NJ':'New Jersey',
+  'NM':'New Mexico','NY':'New York','NC':'North Carolina','ND':'North Dakota','OH':'Ohio',
+  'OK':'Oklahoma','OR':'Oregon','PA':'Pennsylvania','RI':'Rhode Island','SC':'South Carolina',
+  'SD':'South Dakota','TN':'Tennessee','TX':'Texas','UT':'Utah','VT':'Vermont',
+  'VA':'Virginia','WA':'Washington','WV':'West Virginia','WI':'Wisconsin','WY':'Wyoming',
+  'DC':'District of Columbia'
+};
+function expandStateAbbr(address) {
+  // Match a 2-letter state abbreviation optionally followed by a zip, at the end of the address
+  return address.replace(/\b([A-Z]{2})\b(?=(\s+\d{5})?(\s*,?\s*USA?)?\s*$)/g, (match, abbr) => {
+    return _stateAbbr[abbr] || match;
+  });
+}
+async function _geocodeWithRetry(address, retries=3, baseDelay=1200) {
+  const expanded = expandStateAbbr(address);
+  if (_geocodeCache[expanded]) return _geocodeCache[expanded];
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(expanded);
+  for (let attempt = 0; attempt < retries; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, baseDelay * attempt * 2));
+    try {
+      const res = await fetch(url, {headers:{'Accept-Language':'en'}});
+      if (res.status === 429) { continue; }
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data?.length) return null;
+      const result = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      _geocodeCache[expanded] = result;
+      return result;
+    } catch(e) { if (attempt === retries-1) return null; }
+  }
+  return null;
+}
 async function lookupSPDForCaaS(address) {
   try {
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(address);
-    const res = await fetch(url, {headers:{'Accept-Language':'en'}});
-    const data = await res.json();
-    if (!data?.length) return null;
-    const lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
+    const geo = await _geocodeWithRetry(address);
+    if (!geo) return null;
+    const { lat, lon } = geo;
     const hexData = await loadPLHexData();
     if (hexData) {
       const hex = findPLHexagon(lat, lon);
@@ -572,7 +609,7 @@ async function renderCaaSQuote(qWrap) {
     const spd = r?.spd ?? 20;
     const fee = lookupFee(S.caasProduct, S.stalls, eligible);
     siteResults.push({ address:addr, spd, eligible, fee, hasData: r?.spd !== null });
-    await new Promise(resolve => setTimeout(resolve, 250));
+    await new Promise(resolve => setTimeout(resolve, 1200));
   }
 
   const portMonthly = siteResults.reduce((a,s) => a+s.fee.monthly, 0);
@@ -666,12 +703,12 @@ async function renderCaaSQuote(qWrap) {
     <div class="q-sec">
       <div class="q-sec-title">What's included</div>
       <div class="inc-list">
-        ${[['✓ Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.'],
+        ${[['Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.'],
            ['✓ Full-term O&M (10 years): Preventative and corrective maintenance included.'],
            ['✓ HaloAI on-charger intelligence: Driver support, remote diagnostics, and retail experience features.'],
            ['✓ Network & connectivity: LTE, OCPP compliance, and cloud monitoring.'],
            ['✓ No upfront CapEx: Fixed monthly subscription — capital expenditure not required.'],
-          ].map(([t,s])=>`<div class="inc-item"<div><div class="inc-title">${t}</div></div></div>`).join('')}
+          ].map(([t,s])=>`<div class="inc-item"<div><div class="inc-title">${t}</div><div class="inc-sub">${s}</div></div></div>`).join('')}
       </div>
     </div>
 
@@ -2603,7 +2640,7 @@ async function showPLPage() {
   for (const addr of sites) {
     const result = await lookupSPDForPL(addr);
     siteResults.push({ address: addr, result });
-    await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => setTimeout(r, 1200));
   }
   if (loadingEl) loadingEl.style.display = 'none';
 
@@ -3033,7 +3070,7 @@ async function loadAndFinalizeCaaSPL() {
     const r = await lookupSPDForCaaS(addr);
     totalSPD += r?.spd ?? 20;
     if (!firstGeo && r?.lat) firstGeo = r;
-    await new Promise(res => setTimeout(res, 250));
+    await new Promise(res => setTimeout(res, 1200));
   }
   if (loadEl) loadEl.style.display = 'none';
 
@@ -3124,10 +3161,10 @@ function renderCaaSPLShell() {
       <div class="pl-card-sub">CaaS fee is fixed. Adjust sessions, charging price, and electricity cost.</div>
       <div class="pl-slider-grid">
         <div class="pl-slider-group">
-          <div class="pl-slider-header"><span class="pl-slider-label">Sessions / Day (Total)</span><span class="pl-slider-value" id="caas-valSPD">--</span></div>
+          <div class="pl-slider-header"><span class="pl-slider-label">Sessions / Day</span><span class="pl-slider-value" id="caas-valSPD">--</span></div>
           <div class="pl-slider-desc">Year 1 baseline (pre-filled from Paren data)</div>
-          <input type="range" class="pl-range" id="caas-sliderSPD" min="5" max="200" step="1" value="20">
-          <div class="pl-slider-range"><span>5</span><span>200</span></div>
+          <input type="range" class="pl-range" id="caas-sliderSPD" min="5" max="100" step="1" value="20">
+          <div class="pl-slider-range"><span>5</span><span>100</span></div>
         </div>
         <div class="pl-slider-group">
           <div class="pl-slider-header"><span class="pl-slider-label">Charging Price</span><span class="pl-slider-value" id="caas-valChargingPrice">$0.50</span></div>
