@@ -717,6 +717,14 @@ async function renderCaaSQuote(qWrap) {
 
   // Store the SPD-resolved fee so the P&L picks up the correct number
   S.caasAnnualFee = Math.round(portAnnual);
+
+  // LCFS summary across all eligible data sites
+  const anyEligible = dataSites.some(s => s.eligible);
+  const totalLCFSReduction = dataSites
+    .filter(s => s.eligible && s.spd !== null)
+    .reduce((a, s) => a + computeLCFSReduction(s.spd), 0);
+  const lcfsReductionRounded = Math.round(totalLCFSReduction / 1000) * 1000;
+
   const productMeta = {base:{label:'Base Station',kw:200},re400:{label:'RE400',kw:400}}[S.caasProduct]||{label:'—',kw:'—'};
   const LCFS_BADGE  = `<span style="font-size:0.62rem;font-family:var(--mono);background:rgba(248,185,24,.10);border:1px solid var(--gold-border);border-radius:3px;padding:1px 5px;color:var(--gold);margin-left:6px;vertical-align:middle;letter-spacing:.04em;">LCFS</span>`;
   const startLabel  = S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
@@ -772,6 +780,11 @@ async function renderCaaSQuote(qWrap) {
         <div style="font-size:62px;font-weight:400;color:var(--gold);font-family:var(--mono);letter-spacing:-.04em;line-height:1;">${fmtFee(portMonthly,anyCapped)}</div>
         <div style="font-size:.95rem;color:var(--dim);margin-top:6px;">per month · fixed for 10-year term${isPortfolio?' · '+n+' sites':''}${anyCapped?' · indicative minimum':''}</div>
         <div style="font-size:.78rem;font-family:var(--mono);color:var(--muted);margin-top:5px;">${fmtFee(portAnnual,anyCapped)}/yr · ${fmtFee(port10yr,anyCapped)} over full term</div>
+        ${anyEligible ? `
+        <div style="margin-top:14px;display:inline-flex;align-items:center;gap:8px;background:rgba(248,185,24,.08);border:1px solid var(--gold-border);border-radius:6px;padding:7px 12px;font-size:.78rem;font-family:var(--mono);">
+          <span style="color:var(--gold);letter-spacing:.05em;">⚡ LCFS CREDITS APPLIED</span>
+          <span style="color:var(--muted);">est. ${fmtC(lcfsReductionRounded)}/yr reduction included in fee</span>
+        </div>` : ''}
       </div>
     </div>
 
@@ -796,10 +809,11 @@ async function renderCaaSQuote(qWrap) {
       <div class="q-sec-title-row"><div class="q-sec-title">Station Configuration</div><button class="q-edit-btn" onclick="goBackFromQuote(4)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><span class="q-row-name">Charger model</span><span class="q-price">${productMeta.label} (${productMeta.kw} kW/port)</span></div>
-        <div class="q-row"><span class="q-row-name">Battery storage</span><span class="q-price">${{none:'None (direct grid connection)','125kw':'125 kW Nexus — included in CaaS','250kw':'250 kW Nexus Pro — included in CaaS',unsure:'To be determined — Electric Era will recommend'}[S.caasBattery]||'—'}</span></div>
+        <div class="q-row"><span class="q-row-name">Battery storage</span><span class="q-price">${{none:'None (direct grid connection)','125kw':'125 kW Battery — included in CaaS','250kw':'250 kW Battery — included in CaaS',unsure:'To be determined — Electric Era will recommend'}[S.caasBattery]||'—'}</span></div>
         <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls}${anyCapped?'+':''} per site</span></div>
         <div class="q-row"><span class="q-row-name">Sites</span><span class="q-price">${n}</span></div>
         <div class="q-row"><span class="q-row-name">Contract term</span><span class="q-price">10 years · fixed fee, no CapEx</span></div>
+        <div class="q-row"><span class="q-row-name">LCFS eligibility</span><span class="q-price">${anyEligible ? `<span style="color:var(--gold);">✓ Eligible</span> — credits applied to your fee (CA / OR / WA)` : 'Not eligible — site is outside LCFS states'}</span></div>
       </div>
     </div>
 
@@ -1174,7 +1188,33 @@ const SLIDES = [
     </div>
   `, valid:()=>{ if(!S.caasProduct){toast('Please select a product.');return false;} return true; }},
 
-  // ── CaaS: BATTERY (slide 5) ──────────────────────────────────
+  // ── CaaS: BATTERY INTERSTITIAL (slide 5) ────────────────────
+  { step:2, isCaaS:true, render:()=>`
+    <div class="eyebrow">CaaS — Energy Management</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:8px;">
+      <div>
+        <h1 style="margin-bottom:18px;">Understanding <em>energy management</em>.</h1>
+        <div style="font-size:1.02rem;color:var(--dim);line-height:1.7;">
+          <p style="margin-bottom:14px;">Choosing the right energy management solution can reduce utility <a href="https://pluginamerica.org/understanding-demand-charges/" target="_blank" style="color:inherit;">demand charges</a>, accelerate implementation timelines, and unlock power capacity above the grid.</p>
+          <p style="margin-bottom:14px;">With CaaS, Electric Era handles all battery procurement, installation, and O&M as part of your subscription — there's no additional upfront cost. The battery configuration you choose will be reflected in your monthly fee. <div style="color:var(--text);font-weight:700;margin-top:6px;">On the next page, select the battery size that best fits your site.</div></p>
+          <p style="margin-bottom:14px;">Resources:</p>
+          <ul style="padding-left:18px;">
+            <li><a href="https://electricera.tech/resources/mitigating-demand-charges-with-a-smarter-approach-to-ev-charging" target="_blank" style="color:inherit;font-size:1rem;">[White Paper] How to mitigate demand charges</a></li>
+            <li><a href="https://electricera.tech/resources/utility-service-battery-sizing-for-storage-backed-ev-fast-charging-stations" target="_blank" style="color:inherit;font-size:1rem;">[White Paper] Utility service & battery sizing for EV fast charging stations</a></li>
+          </ul>
+        </div>
+      </div>
+      <div style="border-radius:var(--r);overflow:hidden;">
+        <img src="https://cdn.prod.website-files.com/670ffcd1b5fc3cea38cfc002/69b1e1734782a48c135b4264_24cebd56d94b5be2493678ef7edf60a9_EnergyManagementPlanChart.png" alt="Energy Management Plan Chart" style="width:100%;height:auto;display:block;border-radius:var(--r);">
+      </div>
+    </div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn btn-ghost" onclick="prev()">Back</button>
+    </div>
+  `, valid:()=>true },
+
+  // ── CaaS: BATTERY (slide 6) ──────────────────────────────────
   { step:2, isCaaS:true, render:()=>`
     <div class="eyebrow">CaaS Configuration</div>
     <h1>Add a <em>battery</em> to your CaaS station?</h1>
@@ -1185,8 +1225,8 @@ const SLIDES = [
         <div class="battery-choices">
           ${[
             ['none','','No battery','Direct grid connection — lower monthly fee'],
-            ['125kw','','125 kW Battery (Nexus)','Best for moderate demand charges ($5–$14/kW/month)'],
-            ['250kw','','250 kW Battery (Nexus Pro)','Best for high utilization or demand charges ($14+/kW/month)'],
+            ['125kw','','125 kW Battery','Best for moderate demand charges ($5–$14/kW/month)'],
+            ['250kw','','250 kW Battery','Best for high utilization or demand charges ($14+/kW/month)'],
             ['unsure','','Not Sure','An Electric Era expert will recommend the right option'],
           ].map(([v,icon,t,d],i)=>`
             <div class="choice ${S.caasBattery===v?'sel':''}" onclick="S.caasBattery='${v}';this.closest('.battery-choices').querySelectorAll('.choice').forEach(el=>el.classList.remove('sel'));this.classList.add('sel');updateBatteryMedia('${v}');" style="padding:12px 14px;">
@@ -1205,7 +1245,7 @@ const SLIDES = [
     </div>
   `, valid:()=>{ if(S.caasBattery===null){toast('Please select a battery option.');return false;} return true; }},
 
-  // ── CaaS: SUMMARY (slide 6) ──────────────────────────────────
+  // ── CaaS: SUMMARY (slide 7) ──────────────────────────────────
   { step:3, isCaaS:true, render:()=>{
     const productLabel={base:'Base Station (200 kW/port)',re400:'RE400 (400 kW/port)'}[S.caasProduct]||'—';
     return `
@@ -1223,8 +1263,8 @@ const SLIDES = [
       </div>
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-          <div><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW (Nexus)','250kw':'250 kW (Nexus Pro)',unsure:'Not Sure'}[S.caasBattery]||'—'}</div></div>
-          <button onclick="go(5)" style="background:none;border:none;cursor:pointer;font-size:.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+          <div><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW Battery','250kw':'250 kW Battery',unsure:'Not Sure'}[S.caasBattery]||'—'}</div></div>
+          <button onclick="go(6)" style="background:none;border:none;cursor:pointer;font-size:.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
       <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">Charging as a Service</div></div>
@@ -1395,19 +1435,19 @@ const SLIDES = [
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
           <div><div class="sum-label">Product</div><div class="sum-val">${{base:'Base Station (200 kW/port)',re400:'RE400 (400 kW/port)'}[S.dpProduct]||'—'}</div></div>
-          <button onclick="go(7)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+          <button onclick="go(8)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
           <div><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'Not Sure'}[S.battery]||'—'}</div></div>
-          <button onclick="go(9)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+          <button onclick="go(10)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
           <div><div class="sum-label">Retail Programs</div><div class="sum-val">${S.retailPrograms.includes('none')?'None selected':S.retailPrograms.length+' program'+(S.retailPrograms.length!==1?'s':'')}</div></div>
-          <button onclick="go(11)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+          <button onclick="go(12)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
       <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">${{allocated:'Direct purchase',financed:'Financed / subscription model'}[S.budget]||'—'}</div></div>
@@ -1877,15 +1917,15 @@ function renderQuote(){
     </div>
 
     <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(7)">Edit ↗</button></div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(8)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">${{base:'Base Station (FC200K)',re400:'RE400'}[p.product]||'EV Charging Station'} — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era ${p.product==='re400'?'RE400 with HaloAI — intelligent retail integration':'Base Station'} · hardware, O&M, and software bundle</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
-        <div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'Nexus 125 kW BESS — hardware, O&M bundle · Section 48E tax credits may significantly reduce your net investment','250kw':'Nexus Pro 250 kW BESS — hardware, O&M bundle · Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>
+        <div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW BESS — hardware, O&M bundle · Section 48E tax credits may significantly reduce your net investment','250kw':'250 kW BESS — hardware, O&M bundle · Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>
       </div>
     </div>
 
     <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Electric Era Experiences & Standard O&M</div><button class="q-edit-btn" onclick="goBackFromQuote(11)">Edit ↗</button></div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Electric Era Experiences & Standard O&M</div><button class="q-edit-btn" onclick="goBackFromQuote(12)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">Electric Era Platform${activePrograms.length?' + Retail Programs':''}</div><div class="q-row-desc">${softwareDesc}</div></div><div class="q-price ${p.software>0?'gold':'dim'}">${p.software>0?fmt(p.software)+'/year':'Included'}</div></div>
         ${p.batteryOM>0?`<div class="q-row"><div><div class="q-row-name">Battery O&M</div><div class="q-row-desc">Warranty, maintenance & monitoring for battery energy storage system</div></div><div class="q-price gold">${fmt(p.batteryOM)}/year</div></div>`:''}
@@ -1894,7 +1934,7 @@ function renderQuote(){
 
     ${addonRows.length?`
     <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Add-on Services</div><button class="q-edit-btn" onclick="goBackFromQuote(12)">Edit ↗</button></div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Add-on Services</div><button class="q-edit-btn" onclick="goBackFromQuote(13)">Edit ↗</button></div>
       <div class="q-table">
         ${addonRows.map(([name,desc,price])=>`<div class="q-row"><div><div class="q-row-name">${name}</div><div class="q-row-desc">${desc}</div></div><div class="q-price gold">${price}</div></div>`).join('')}
       </div>
@@ -1941,7 +1981,7 @@ function renderQuote(){
     </div>`:''}
 
     <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Project Timeline</div><button class="q-edit-btn" onclick="goBackFromQuote(12)">Edit ↗</button></div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Project Timeline</div><button class="q-edit-btn" onclick="goBackFromQuote(13)">Edit ↗</button></div>
       <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:18px 16px 14px;">
         <p style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--mono);">Estimated schedule anchored to your target completion date. All durations are illustrative and subject to site-specific conditions.</p>
         ${buildGantt(S.startDate)}
@@ -3438,7 +3478,7 @@ function renderCaaSPLShell() {
       <div class="pl-card-title">CaaS Configuration</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:.85rem;">
         <div><span style="color:var(--muted);">Charger: </span><span style="color:var(--gold);">${productLabel}</span></div>
-        <div><span style="color:var(--muted);">Battery: </span><span style="color:var(--gold);">${{none:'None','125kw':'125 kW Nexus','250kw':'250 kW Nexus Pro',unsure:'TBD'}[S.caasBattery]||'—'}</span></div>
+        <div><span style="color:var(--muted);">Battery: </span><span style="color:var(--gold);">${{none:'None','125kw':'125 kW Battery','250kw':'250 kW Battery',unsure:'TBD'}[S.caasBattery]||'—'}</span></div>
         <div><span style="color:var(--muted);">Stalls: </span><span style="color:var(--gold);">${S.stalls}/site</span></div>
         <div><span style="color:var(--muted);">CaaS fee: </span><span style="color:var(--gold);">$${Math.round(caasAnnual/12).toLocaleString()}/mo · $${Math.round(caasAnnual).toLocaleString()}/yr</span></div>
         <div><span style="color:var(--muted);">Sites: </span><span style="color:var(--gold);">${sites.length}</span></div>
