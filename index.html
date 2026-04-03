@@ -904,6 +904,7 @@ async function submitToHubSpot() {
     cpq_retail_question:              activeRetail.map(r => retailMapContact[r] || r).join(';'),
     cpq_test_battery:                 batteryMapContact[S.battery] || '',
     cpq_furthest_step:                '4',
+     filled_out_site_host_form:         'true',
   };
 
   // ── Deal properties ───────────────────────────────────────────────────────
