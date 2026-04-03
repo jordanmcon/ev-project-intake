@@ -79,6 +79,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .choice:hover::after{opacity:1}
 .choice.sel{border-color:var(--gold);background:var(--s3)}
 .choice.sel::after{opacity:1}
+.choice.choice-disabled{opacity:.45;cursor:not-allowed;pointer-events:auto;}
+.choice.choice-disabled:hover{border-color:var(--border);transform:none;}
+.choice.choice-disabled::after{opacity:0!important;}
 .ck{width:20px;height:20px;min-width:20px;border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;color:var(--muted);background:var(--s3);transition:all .17s;margin-top:1px;flex-shrink:0;position:relative;z-index:1}
 .choice.sel .ck{background:var(--gold);border-color:var(--gold);color:#09080A;font-weight:700}
 .ci{font-size:1.02rem;min-width:20px;margin-top:1px;flex-shrink:0;position:relative;z-index:1}
@@ -513,7 +516,9 @@ function handleIntakeCSV(file) {
 // ── CaaS ENGINE ──────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════
 
-// Fee table (from EE___MN8_CaaS_Calculator XLSX, IRR=12%)
+// ── CaaS FEE CONFIG ───────────────────────────────────────────
+// Pre-calibrated no-battery / no-LCFS base fees at 12% target IRR
+// (from EE + MN8 CaaS Calculator V2.xlsm, "Indicative CaaS Fee" sheet)
 const TABLE_FEES = {
   re400: { 4:{noLcfs:187000,lcfs:117000}, 6:{noLcfs:258000,lcfs:154000}, 8:{noLcfs:329000,lcfs:191000} },
   base:  { 4:{noLcfs:116000,lcfs: 76000}, 6:{noLcfs:160000,lcfs:101000}, 8:{noLcfs:197000,lcfs:118000} },
@@ -521,17 +526,89 @@ const TABLE_FEES = {
 const TABLE_STALLS = [4,6,8];
 const LCFS_STATES_CAAS = ['CA','OR','WA','CALIFORNIA','OREGON','WASHINGTON'];
 
+// LCFS CI and price data from XLSX (LCFS sheet)
+const LCFS_CI_GASOLINE = {2026:75.16,2027:73.72,2028:72.28,2029:70.84,2030:69.40,2031:64.94,2032:60.48,2033:56.02,2034:51.55,2035:47.09};
+const LCFS_CI_GRID     = {2026:78.9471,2027:78.1576,2028:77.376,2029:76.6022,2030:75.8362,2031:70.7805,2032:65.7247,2033:60.669,2034:55.6132,2035:50.5575};
+const LCFS_PRICE_TBL   = {2026:65,2027:65,2028:65,2029:65,2030:60,2031:40,2032:20};
+
+// Battery incremental capex vs. no-battery (from Electric Era Standard Pricing sheet)
+// Nexus (125kW) adds $236,500 total; Nexus Pro (250kW) adds $276,000 total
+// Hardware portion (ITC-eligible): Nexus $146,500 / Pro $186,000
+const CAAS_BATTERY_DELTA = { '125kw': { total: 227000, hw: 146500 }, '250kw': { total: 266500, hw: 186000 } };
+// Note: total incremental = spreadsheet bundle cost − PowerNode Zero ($9,500 removed when battery added)
+
 function isLCFSEligibleCaaS(address) {
   const u = address.toUpperCase();
   return LCFS_STATES_CAAS.some(s => new RegExp('\\b'+s+'\\b').test(u));
 }
-function lookupFee(product, stalls, lcfsEligible) {
-  const capped  = stalls > 8;
-  const snapKey = capped ? 8 : (TABLE_STALLS.includes(stalls) ? stalls : 8);
-  const row     = TABLE_FEES[product]?.[snapKey] || TABLE_FEES.base[8];
-  const annual  = lcfsEligible ? row.lcfs : row.noLcfs;
-  return { annual, monthly: annual/12, total10: annual*10, lcfs: lcfsEligible, capped, snapStalls: snapKey };
+
+// Credits per kWh dispensed (throughput method, per LCFS sheet formula)
+function _lcfsCreditsPerKwh(calYear) {
+  const ciGas  = LCFS_CI_GASOLINE[calYear] || LCFS_CI_GASOLINE[2035];
+  const ciGrid = LCFS_CI_GRID[calYear]     || LCFS_CI_GRID[2035];
+  const EER = 5, Ei = 3.6; // MJ/kWh
+  return Math.max(0, (ciGas - ciGrid / EER) * Ei * 1e-6);
 }
+function _lcfsPrice(calYear) { return LCFS_PRICE_TBL[calYear] || 20; }
+
+// Annual LCFS revenue: discounted SPD × 10% YoY growth, 25% SPD discount for conservatism
+function _lcfsAnnualRevenue(spd, yr, startYear) {
+  const calYear = (startYear || 2026) + yr - 1;
+  const spdDiscounted = spd * 0.75 * Math.pow(1.10, yr - 1);
+  const kWh = spdDiscounted * 365 * 35;
+  return kWh * _lcfsCreditsPerKwh(calYear) * _lcfsPrice(calYear);
+}
+
+// PV of LCFS stream over 10 yrs at 12%, then convert to equivalent annual amount
+function computeLCFSReduction(spd, startYear) {
+  const annuityFactor = (1 - Math.pow(1.12, -10)) / 0.12; // ≈ 5.6502
+  let pv = 0;
+  for (let yr = 1; yr <= 10; yr++) {
+    pv += _lcfsAnnualRevenue(spd, yr, startYear) / Math.pow(1.12, yr);
+  }
+  return pv / annuityFactor;
+}
+
+function snapStalls(stalls) {
+  if (stalls <= 5) return 4;
+  if (stalls <= 7) return 6;
+  return 8;
+}
+
+// Main fee lookup — spd drives dynamic LCFS; battery capex is folded into total hardware capex
+function lookupFee(product, stalls, lcfsEligible, spd, battery) {
+  const capped  = stalls > 8;
+  const snapKey = capped ? 8 : snapStalls(stalls);
+  const row     = TABLE_FEES[product]?.[snapKey] || TABLE_FEES.base[8];
+
+  // Total hardware capex basis: base product + battery (folded in together at the capex level)
+  // Battery annuity = net capex (after 30% ITC on HW portion) amortized at 12% IRR over 10 yrs
+  let battAnnual = 0;
+  if (battery && battery !== 'none' && battery !== 'unsure') {
+    const b = CAAS_BATTERY_DELTA[battery];
+    if (b) {
+      const annuityFactor = (1 - Math.pow(1.12, -10)) / 0.12;
+      const netBattCapex  = b.total - b.hw * 0.30; // 30% ITC on hardware portion
+      battAnnual = netBattCapex / annuityFactor;
+    }
+  }
+
+  // Base fee from table (no-LCFS calibrated at 12% IRR) plus battery capex contribution
+  const baseNoLcfs = row.noLcfs + battAnnual;
+  const baseLcfs   = row.lcfs   + battAnnual;
+
+  // LCFS: dynamic if SPD known, fallback to table differential if not
+  let annual = baseNoLcfs;
+  if (lcfsEligible) {
+    annual -= (spd != null) ? computeLCFSReduction(spd) : (baseNoLcfs - baseLcfs);
+  }
+
+  annual = Math.max(annual, 5000);
+  annual = Math.round(annual / 1000) * 1000; // round to nearest $1K
+
+  return { annual, monthly: annual / 12, total10: annual * 10, lcfs: lcfsEligible, capped, snapStalls: snapKey };
+}
+
 function fmtFee(n, capped) { return '$'+Math.round(n).toLocaleString('en-US')+(capped?'+':''); }
 function fmtC(n) { return '$'+Math.round(n).toLocaleString('en-US'); }
 
@@ -610,27 +687,48 @@ async function renderCaaSQuote(qWrap) {
   for (const addr of sites) {
     const r = await lookupSPDForCaaS(addr);
     const eligible = isLCFSEligibleCaaS(addr);
-    const spd = r?.spd ?? 20;
-    const fee = lookupFee(S.caasProduct, S.stalls, eligible);
-    siteResults.push({ address:addr, spd, eligible, fee, hasData: r?.spd !== null });
+    const spd = (r && r.spd != null) ? r.spd : null;
+    const fee = spd !== null ? lookupFee(S.caasProduct, S.stalls, eligible, spd, S.caasBattery) : null;
+    siteResults.push({ address:addr, spd, eligible, fee, hasData: spd !== null });
     await new Promise(resolve => setTimeout(resolve, 1200));
   }
 
-  const portMonthly = siteResults.reduce((a,s) => a+s.fee.monthly, 0);
-  const portAnnual  = siteResults.reduce((a,s) => a+s.fee.annual,  0);
-  const port10yr    = siteResults.reduce((a,s) => a+s.fee.total10, 0);
-  const anyCapped   = siteResults.some(s => s.fee.capped);
+  const dataSites  = siteResults.filter(s => s.hasData);
+  const allNoData  = dataSites.length === 0;
+
+  if (allNoData) {
+    qWrap.innerHTML = `
+      <div style="max-width:560px;margin:60px auto;text-align:center;">
+        <div style="font-size:2.2rem;margin-bottom:20px;">📡</div>
+        <h2 style="font-size:1.6rem;font-weight:400;margin-bottom:12px;">Not enough data for your site</h2>
+        <p style="color:var(--muted);font-size:1rem;line-height:1.5;margin-bottom:28px;">We do not have enough data for your site. Our team can help you with a utilization forecast.</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="goBackFromQuote(3)">← Adjust Site or Stalls</button>
+          <button class="btn btn-ghost" onclick="restart()">Start over</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const portMonthly = dataSites.reduce((a,s) => a+s.fee.monthly, 0);
+  const portAnnual  = dataSites.reduce((a,s) => a+s.fee.annual,  0);
+  const port10yr    = dataSites.reduce((a,s) => a+s.fee.total10, 0);
+  const anyCapped   = dataSites.some(s => s.fee.capped);
+
+  // Store the SPD-resolved fee so the P&L picks up the correct number
+  S.caasAnnualFee = Math.round(portAnnual);
   const productMeta = {base:{label:'Base Station',kw:200},re400:{label:'RE400',kw:400}}[S.caasProduct]||{label:'—',kw:'—'};
   const LCFS_BADGE  = `<span style="font-size:0.62rem;font-family:var(--mono);background:rgba(248,185,24,.10);border:1px solid var(--gold-border);border-radius:3px;padding:1px 5px;color:var(--gold);margin-left:6px;vertical-align:middle;letter-spacing:.04em;">LCFS</span>`;
   const startLabel  = S.startDate?new Date(S.startDate+'-02').toLocaleString('default',{month:'long',year:'numeric'}):'—';
   const bizLabel    = {'business-owner':'Business Owner',cpo:'Charge Point Operator',distributor:'Distributor',vendor:'Vendor',other:'Other'}[S.businessType]||'—';
 
+  const NO_DATA_MSG = `<span style="font-size:.78rem;color:#EF4444;font-family:var(--mono);">No data — team will forecast</span>`;
   const siteRows = isPortfolio ? siteResults.map(sd => `
     <div class="q-row" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px;">
       <span style="color:var(--dim);font-size:0.82rem;">${sd.address}${sd.eligible?LCFS_BADGE:''}</span>
-      <span style="font-family:var(--mono);font-size:.92rem;">${fmtFee(sd.fee.monthly,sd.fee.capped)}/mo</span>
-      <span style="font-family:var(--mono);font-size:.92rem;">${fmtFee(sd.fee.annual,sd.fee.capped)}/yr</span>
-      <span style="font-family:var(--mono);font-size:.82rem;color:var(--muted);">${sd.hasData?sd.spd+' SPD':'No data'}</span>
+      <span style="font-family:var(--mono);font-size:.92rem;">${sd.hasData ? fmtFee(sd.fee.monthly,sd.fee.capped)+'/mo' : '—'}</span>
+      <span style="font-family:var(--mono);font-size:.92rem;">${sd.hasData ? fmtFee(sd.fee.annual,sd.fee.capped)+'/yr' : '—'}</span>
+      <span style="font-family:var(--mono);font-size:.82rem;color:var(--muted);">${sd.hasData ? sd.spd+' SPD' : NO_DATA_MSG}</span>
     </div>`).join('') : '';
 
   const logoSVG = document.querySelector('.q-logo')?.innerHTML || '';
@@ -698,6 +796,7 @@ async function renderCaaSQuote(qWrap) {
       <div class="q-sec-title-row"><div class="q-sec-title">Station Configuration</div><button class="q-edit-btn" onclick="goBackFromQuote(4)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><span class="q-row-name">Charger model</span><span class="q-price">${productMeta.label} (${productMeta.kw} kW/port)</span></div>
+        <div class="q-row"><span class="q-row-name">Battery storage</span><span class="q-price">${{none:'None (direct grid connection)','125kw':'125 kW Nexus — included in CaaS','250kw':'250 kW Nexus Pro — included in CaaS',unsure:'To be determined — Electric Era will recommend'}[S.caasBattery]||'—'}</span></div>
         <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls}${anyCapped?'+':''} per site</span></div>
         <div class="q-row"><span class="q-row-name">Sites</span><span class="q-price">${n}</span></div>
         <div class="q-row"><span class="q-row-name">Contract term</span><span class="q-price">10 years · fixed fee, no CapEx</span></div>
@@ -707,12 +806,12 @@ async function renderCaaSQuote(qWrap) {
     <div class="q-sec">
       <div class="q-sec-title">What's included</div>
       <div class="inc-list">
-        ${[['✓ Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.'],
-           ['✓ Full-term O&M (10 years): Preventative and corrective maintenance included.'],
-           ['✓ HaloAI on-charger intelligence: Driver support, remote diagnostics, and retail experience features.'],
-           ['✓ Network & connectivity: LTE, OCPP compliance, and cloud monitoring.'],
-           ['✓ No upfront CapEx: Fixed monthly subscription — capital expenditure not required.'],
-          ].map(([t,s])=>`<div class="inc-item"<div><div class="inc-title">${t}</div><div class="inc-sub">${s}</div></div></div>`).join('')}
+        ${['✓ Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.',
+           '✓ Full-term O&M (10 years): Preventative and corrective maintenance included.',
+           '✓ HaloAI on-charger intelligence: Driver support, remote diagnostics, and retail experience features.',
+           '✓ Network & connectivity: LTE, OCPP compliance, and cloud monitoring.',
+           '✓ No upfront CapEx: Fixed monthly subscription — capital expenditure not required.',
+          ].map(t=>`<div class="inc-item"><div class="inc-title">${t}</div></div>`).join('')}
       </div>
     </div>
 
@@ -806,8 +905,10 @@ const S = {
   stalls: 4,
   budget: '',           // 'allocated'|'financed'
   caasProduct: null,    // 'base'|'re400'
+  caasBattery: null,    // 'none'|'125kw'|'250kw'|'unsure' — battery for CaaS flow
   caasAnnualFee: 0,     // set before HubSpot submit
-  battery: null,        // 'none'|'125kw'|'250kw'
+  battery: null,        // 'none'|'125kw'|'250kw'|'unsure' — battery for Direct Purchase flow
+  dpProduct: null,      // 'base'|'re400' — product for Direct Purchase flow
   retailPrograms: [],   // multi: 'rmn'|'loyalty'|'membership' or ['none']
   addDesign: false, addEPC: false, addConstruction: false, addNone: false,
   startDate: '',
@@ -826,19 +927,46 @@ const S = {
   }
 })();
 
+// ── DIRECT PURCHASE PRICING (from Electric Era Standard Pricing sheet) ──────
+// Hardware bundle prices by product and stall count (includes O&M + software bundles)
+// Base Station (FC200K): 4-stall=$264,500  6-stall=$440,500  8-stall=$576,500  (software/retail baked in)
+// RE400:                 4-stall=$228,000  6-stall=$317,000  8-stall=$435,000  (retail add-ons priced separately via ratePerPort)
+const DP_HARDWARE = {
+  base:  { 4: 264500, 6: 440500, 8: 576500 },
+  re400: { 4: 228000, 6: 317000, 8: 435000 },
+};
+// Battery add-on pricing (hardware + 10-yr O&M bundle)
+// Nexus 125kW: $236,500 (hardware $146,500 + O&M $90,000); PowerNode Zero ($9,500) removed
+// Nexus Pro 250kW: $276,000 (hardware $186,000 + O&M $90,000); PowerNode Zero removed
+const DP_BATTERY = { '125kw': { price: 236500, om: 0 }, '250kw': { price: 276000, om: 0 } };
+
+function snapDPStalls(stalls) {
+  if (stalls <= 5) return 4;
+  if (stalls <= 7) return 6;
+  return 8;
+}
+function getDPHardware(product, stalls) {
+  const p = product || 'base';
+  const snap = snapDPStalls(stalls);
+  return DP_HARDWARE[p]?.[snap] || DP_HARDWARE.base[snap];
+}
+
 // ── PRICING ──────────────────────────────────────────────────
 function calcPricing() {
-  const hardware = S.stalls * 55000;
+  const product = S.dpProduct || 'base';
+  const hardware = getDPHardware(product, S.stalls);
   const n = S.retailPrograms.filter(p => p !== 'none').length;
-  const ratePerPort = [14000, 14000, 18000, 28000][n] || 0;
+  // Retail add-on pricing only applies to RE400; Base Station has software baked into hardware price
+  const ratePerPort = product === 're400' ? ([14000, 14000, 18000, 28000][n] || 0) : 0;
   const software = ratePerPort * S.stalls;
-  const batteryPrice = S.battery === '125kw' ? 123000 : S.battery === '250kw' ? 186000 : 0;
-  const batteryOM = (S.battery === '125kw' || S.battery === '250kw') ? 9000 : 0;
+  const battInfo = DP_BATTERY[S.battery];
+  const batteryPrice = battInfo ? battInfo.price : 0;
+  const batteryOM = 0; // O&M bundled into batteryPrice above
   const design = S.addDesign ? 31500 : 0;
   const epc = S.addEPC ? 40000 : 0;
   const construction = S.addConstruction ? 164500 : 0;
   const subtotal = hardware + software + batteryPrice + batteryOM + design + epc + construction;
-  return { hardware, software, batteryPrice, batteryOM, design, epc, construction, subtotal, ratePerPort, n };
+  return { hardware, software, batteryPrice, batteryOM, design, epc, construction, subtotal, ratePerPort, n, product };
 }
 
 function fmt(n) { return '$' + n.toLocaleString('en-US'); }
@@ -954,20 +1082,28 @@ const SLIDES = [
     <div class="field" style="margin-bottom:22px;margin-top:20px;">
       <label>Estimated # of stalls</label>
       <div class="stall-display" id="stall-num">${S.stalls}</div>
-      <input type="range" id="stall-range" min="2" max="18" value="${S.stalls}" oninput="S.stalls=+this.value;document.getElementById('stall-num').textContent=this.value;trackRange(this)">
-      <div class="range-labels"><span>2</span><span>6</span><span>10</span><span>14</span><span>18</span></div>
+      <input type="range" id="stall-range" min="2" max="12" step="2" value="${Math.min(12,Math.max(2,S.stalls))}" oninput="S.stalls=+this.value;document.getElementById('stall-num').textContent=this.value;updateCaaSEligibility();trackRange(this)">
+      <div class="range-labels"><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span><span>12</span></div>
     </div>
     <div class="field">
       <label>Budget approach</label>
       <div class="choices">
-        ${[
-          ['allocated','','Direct purchase','I have budget for a direct purchase and am ready to move forward.'],
-          ['financed','','Monthly payments','I am interested in Charging-as-a-Service (CaaS) models or financing options to minimize or reduce upfront costs.'],
-        ].map(([v,icon,t,d],i)=>`
-          <div class="choice ${S.budget===v?'sel':''}" onclick="pick('budget','${v}',this)">
-            <div class="ck">${String.fromCharCode(65+i)}</div><div class="ci">${icon}</div>
-            <div class="cb"><div class="ct">${t}</div><div class="cd">${d}</div></div>
-          </div>`).join('')}
+        ${(()=>{
+          const caasAvail = [4,6,8].includes(S.stalls);
+          return [
+            ['allocated','','Direct purchase','I have budget for a direct purchase and am ready to move forward.',true],
+            ['financed','','Monthly payments',
+              caasAvail
+                ? 'I am interested in Charging-as-a-Service (CaaS) models or financing options to minimize or reduce upfront costs.'
+                : 'CaaS requires 4, 6, or 8 stalls. Adjust your stall count above to enable this option.',
+              caasAvail],
+          ].map(([v,icon,t,d,enabled],i)=>`
+            <div class="choice ${S.budget===v&&enabled?'sel':''} ${!enabled?'choice-disabled':''}" data-choice="${v}"
+              onclick="${enabled ? 'pick(\'budget\',\''+v+'\',this)' : 'toast(\'CaaS is only available for 4, 6, or 8 stalls. Please adjust the stall count above.\')'}">
+              <div class="ck">${String.fromCharCode(65+i)}</div><div class="ci">${icon}</div>
+              <div class="cb"><div class="ct">${t}</div><div class="cd">${d}</div></div>
+            </div>`).join('');
+        })()}
       </div>
       <div class="ferr" id="e-budget" style="display:none">Please select a budget approach</div>
     </div>
@@ -975,7 +1111,16 @@ const SLIDES = [
       <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn btn-ghost" onclick="prev()">Back</button>
     </div>
-  `, onEnter:()=>{setTimeout(()=>{const r=document.getElementById('stall-range');if(r)trackRange(r);},60);renderIntakeSiteTags();},
+  `, onEnter:()=>{
+    // Snap stalls to nearest valid step-2 value in [2,12]
+    S.stalls = Math.round(Math.min(12, Math.max(2, S.stalls)) / 2) * 2;
+    setTimeout(()=>{
+      const r=document.getElementById('stall-range');
+      if(r){r.value=S.stalls;document.getElementById('stall-num').textContent=S.stalls;trackRange(r);}
+      updateCaaSEligibility();
+    },60);
+    renderIntakeSiteTags();
+  },
     valid:()=>{
       let ok=true;
       const inp=document.getElementById('siteAddressInput');
@@ -991,6 +1136,11 @@ const SLIDES = [
       if(S.sites.length&&!S.siteAddress)S.siteAddress=S.sites[0];
       if(!S.budget){document.getElementById('e-budget').style.display='block';ok=false;}
       else document.getElementById('e-budget').style.display='none';
+      // CaaS (financed) requires 4, 6, or 8 stalls
+      if(S.budget==='financed' && ![4,6,8].includes(S.stalls)){
+        toast('CaaS is only available for 4, 6, or 8 stalls. Please adjust your stall count or choose Direct Purchase.');
+        ok=false;
+      }
       return ok;
   }},
 
@@ -1024,7 +1174,38 @@ const SLIDES = [
     </div>
   `, valid:()=>{ if(!S.caasProduct){toast('Please select a product.');return false;} return true; }},
 
-  // ── CaaS: SUMMARY (slide 5) ──────────────────────────────────
+  // ── CaaS: BATTERY (slide 5) ──────────────────────────────────
+  { step:2, isCaaS:true, render:()=>`
+    <div class="eyebrow">CaaS Configuration</div>
+    <h1>Add a <em>battery</em> to your CaaS station?</h1>
+    <div class="battery-layout">
+      <div>
+        <p class="sub" style="margin-bottom:14px;">A battery can reduce demand charges, accelerate installation, and unlock power capacity above the grid connection. Electric Era handles all battery procurement, installation, and O&M as part of your CaaS subscription.</p>
+        <p class="sub" style="margin-bottom:14px;">Select your preference — your monthly fee will reflect the configuration.</p>
+        <div class="battery-choices">
+          ${[
+            ['none','','No battery','Direct grid connection — lower monthly fee'],
+            ['125kw','','125 kW Battery (Nexus)','Best for moderate demand charges ($5–$14/kW/month)'],
+            ['250kw','','250 kW Battery (Nexus Pro)','Best for high utilization or demand charges ($14+/kW/month)'],
+            ['unsure','','Not Sure','An Electric Era expert will recommend the right option'],
+          ].map(([v,icon,t,d],i)=>`
+            <div class="choice ${S.caasBattery===v?'sel':''}" onclick="S.caasBattery='${v}';this.closest('.battery-choices').querySelectorAll('.choice').forEach(el=>el.classList.remove('sel'));this.classList.add('sel');updateBatteryMedia('${v}');" style="padding:12px 14px;">
+              <div class="ck">${String.fromCharCode(65+i)}</div><div class="ci">${icon}</div>
+              <div class="cb"><div class="ct">${t}</div><div class="cd">${d}</div></div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="battery-chart-box" id="battery-media-box" style="padding:0;overflow:hidden;background:transparent;border:none;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;">
+        ${S.caasBattery ? `<img id="battery-media" src="${getBatteryMediaSrc(S.caasBattery)}" alt="Battery visual" style="width:100%;height:auto;display:block;border-radius:var(--r);transition:opacity .3s;">` : `<div id="battery-media-placeholder" style="width:100%;height:220px;border:1px dashed var(--border);border-radius:var(--r);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.9rem;">Select an option to preview</div>`}
+      </div>
+    </div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn btn-ghost" onclick="prev()">Back</button>
+    </div>
+  `, valid:()=>{ if(S.caasBattery===null){toast('Please select a battery option.');return false;} return true; }},
+
+  // ── CaaS: SUMMARY (slide 6) ──────────────────────────────────
   { step:3, isCaaS:true, render:()=>{
     const productLabel={base:'Base Station (200 kW/port)',re400:'RE400 (400 kW/port)'}[S.caasProduct]||'—';
     return `
@@ -1040,6 +1221,12 @@ const SLIDES = [
           <button onclick="go(4)" style="background:none;border:none;cursor:pointer;font-size:.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
+      <div class="sum-card" style="position:relative;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW (Nexus)','250kw':'250 kW (Nexus Pro)',unsure:'Not Sure'}[S.caasBattery]||'—'}</div></div>
+          <button onclick="go(5)" style="background:none;border:none;cursor:pointer;font-size:.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+        </div>
+      </div>
       <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">Charging as a Service</div></div>
     </div>
     <div class="sec-label">Ideal Completion Date</div>
@@ -1050,8 +1237,37 @@ const SLIDES = [
     </div>`;
   }, valid:()=>{ if(!S.startDate){toast('Please select a completion date.');return false;} return true; }},
 
-  // 4 — BATTERY INTERSTITIAL
-  { step:2, render:()=>`
+  // ── Direct Purchase: PRODUCT SELECTION ──────────────────────
+  { step:2, isDirect:true, render:()=>`
+    <div class="eyebrow">Direct Purchase — Step 1</div>
+    <h1>Which <em>charging product</em>?</h1>
+    <p class="sub">Your site(s) and stall count carry over. Choose your product.</p>
+    <div class="choices" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+      ${[
+        ['base',  'Base Station',  '200 kW / port', 'Electric Era Base Station (FC200K) — Reliable, high-performance EV fast charging.'],
+        ['re400', 'RE400',         '400 kW / port', 'Electric Era RE400 with HaloAI — Intelligent, interactive, and immersive retail integration.'],
+      ].map(([v,label,kw,desc],i)=>`
+        <div class="choice ${S.dpProduct===v?'sel':''}" onclick="S.dpProduct='${v}';this.closest('.choices').querySelectorAll('.choice').forEach(el=>el.classList.remove('sel'));this.classList.add('sel');">
+          <div class="ck">${String.fromCharCode(65+i)}</div>
+          <div class="cb">
+            <div class="ct">${label}</div>
+            <div style="font-size:.8rem;font-family:var(--mono);color:var(--gold);margin:3px 0 4px;">${kw}</div>
+            <div class="cd">${desc}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;font-size:.82rem;color:var(--muted);font-family:var(--mono);">
+      <span style="color:var(--gold);">Site${S.sites.length>1?'s':''}: </span>${S.sites.length?S.sites.join(' · '):(S.siteAddress||'—')} &nbsp;·&nbsp;
+      <span style="color:var(--gold);">Stalls: </span>${S.stalls}
+    </div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="next()">Continue <svg viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn btn-ghost" onclick="prev()">Back</button>
+    </div>
+  `, valid:()=>{ if(!S.dpProduct){toast('Please select a product.');return false;} return true; }},
+
+  // 5 — BATTERY INTERSTITIAL (Direct Purchase)
+  { step:2, isDirect:true, render:()=>`
     <div class="eyebrow">Energy Management Plan</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-top:8px;">
       <div>
@@ -1078,8 +1294,8 @@ const SLIDES = [
     </div>
   `, valid:()=>true },
 
-  // 5 — BATTERY (ENERGY MANAGEMENT)
-  { step:2, render:()=>`
+  // 6 — BATTERY (ENERGY MANAGEMENT — Direct Purchase)
+  { step:2, isDirect:true, render:()=>`
     <div class="eyebrow">Step 2 — Energy Management Plan</div>
     <h1>Do you want to add a <em>battery</em>?</h1>
     <div class="battery-layout">
@@ -1178,14 +1394,20 @@ const SLIDES = [
       </div>
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div><div class="sum-label">Product</div><div class="sum-val">${{base:'Base Station (200 kW/port)',re400:'RE400 (400 kW/port)'}[S.dpProduct]||'—'}</div></div>
+          <button onclick="go(7)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+        </div>
+      </div>
+      <div class="sum-card" style="position:relative;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
           <div><div class="sum-label">Battery</div><div class="sum-val">${{none:'None','125kw':'125 kW','250kw':'250 kW',unsure:'Not Sure'}[S.battery]||'—'}</div></div>
-          <button onclick="go(5)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+          <button onclick="go(9)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
       <div class="sum-card" style="position:relative;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
           <div><div class="sum-label">Retail Programs</div><div class="sum-val">${S.retailPrograms.includes('none')?'None selected':S.retailPrograms.length+' program'+(S.retailPrograms.length!==1?'s':'')}</div></div>
-          <button onclick="go(7)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
+          <button onclick="go(11)" style="background:none;border:none;cursor:pointer;font-size:0.75rem;font-family:var(--mono);color:var(--gold);opacity:.7;padding:0;white-space:nowrap;margin-top:2px;letter-spacing:.04em;transition:opacity .15s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">Edit ↗</button>
         </div>
       </div>
       <div class="sum-card"><div class="sum-label">Budget Approach</div><div class="sum-val">${{allocated:'Direct purchase',financed:'Financed / subscription model'}[S.budget]||'—'}</div></div>
@@ -1227,13 +1449,19 @@ let cur = 0;
 function next(){
   const s=SLIDES[cur]; if(s.valid&&!s.valid())return;
   let t=cur+1;
+  // Skip CaaS-only slides for Direct Purchase users
   if(S.budget==='allocated' && SLIDES[t]?.isCaaS) { while(t<SLIDES.length && SLIDES[t].isCaaS) t++; }
+  // Skip Direct Purchase-only slides for CaaS users
+  if(S.budget==='financed' && SLIDES[t]?.isDirect) { while(t<SLIDES.length && SLIDES[t].isDirect) t++; }
   if(t<SLIDES.length) go(t);
 }
 function prev(){
   if(cur<=0) return;
   let t=cur-1;
+  // Skip CaaS-only slides for Direct Purchase users
   if(S.budget==='allocated' && SLIDES[t]?.isCaaS) { while(t>0 && SLIDES[t].isCaaS) t--; }
+  // Skip Direct Purchase-only slides for CaaS users
+  if(S.budget==='financed' && SLIDES[t]?.isDirect) { while(t>0 && SLIDES[t].isDirect) t--; }
   go(t);
 }
 function validateAndShowQuote(){
@@ -1299,6 +1527,25 @@ function updateBatteryMedia(val){
 }
 
 function pick(key,val,el){ S[key]=val; el.closest('.choices').querySelectorAll('.choice').forEach(c=>c.classList.remove('sel')); el.classList.add('sel'); }
+
+// Dynamically update CaaS eligibility when stall count changes on slide 3
+function updateCaaSEligibility() {
+  const caasAvail = [4,6,8].includes(S.stalls);
+  const finCard = document.querySelector('[data-choice="financed"]');
+  if (!finCard) return;
+  const descEl = finCard.querySelector('.cd');
+  if (caasAvail) {
+    finCard.classList.remove('choice-disabled');
+    finCard.setAttribute('onclick', "pick('budget','financed',this)");
+    if (descEl) descEl.textContent = 'I am interested in Charging-as-a-Service (CaaS) models or financing options to minimize or reduce upfront costs.';
+  } else {
+    finCard.classList.add('choice-disabled');
+    finCard.setAttribute('onclick', "toast('CaaS is only available for 4, 6, or 8 stalls. Please adjust the stall count above.')");
+    if (descEl) descEl.textContent = 'CaaS requires 4, 6, or 8 stalls. Adjust your stall count above to enable this option.';
+    // Deselect CaaS if it was previously selected
+    if (S.budget === 'financed') { S.budget = ''; finCard.classList.remove('sel'); }
+  }
+}
 function pickBattery(val,el){ S.battery=val; el.closest('.battery-choices').querySelectorAll('.choice').forEach(c=>c.classList.remove('sel')); el.classList.add('sel'); }
 function toggleArr(key,val,el){
   if(S[key].includes(val)){S[key]=S[key].filter(v=>v!==val);el.classList.remove('sel');el.querySelector('.chkbox').textContent='';}
@@ -1533,7 +1780,7 @@ async function showQuote(){
     // Pre-compute indicative CaaS fee for HubSpot
     const _sites = S.sites.length ? S.sites : (S.siteAddress ? [S.siteAddress] : []);
     const _eligible = _sites.length ? isLCFSEligibleCaaS(_sites[0]) : false;
-    const _fee = lookupFee(S.caasProduct||'base', S.stalls, _eligible);
+    const _fee = lookupFee(S.caasProduct||'base', S.stalls, _eligible, null, S.caasBattery);
     S.caasAnnualFee = Math.round(_fee.annual * Math.max(1, _sites.length));
     try { await submitToHubSpot(); } catch(err){ console.error('HubSpot error:',err); }
     window.location.hash='quote';
@@ -1603,12 +1850,16 @@ function renderQuote(){
   <path class="st0" d="M155.38,135c0,5.26-4.27,9.52-9.55,9.52s-9.55-4.26-9.55-9.52,4.27-9.52,9.55-9.52,9.55,4.26,9.55,9.52ZM184.62,135c0,5.26,4.27,9.52,9.55,9.52s9.55-4.26,9.55-9.52-4.27-9.52-9.55-9.52c-5.27,0-9.55,4.26-9.55,9.52ZM205,90h-23.35l-9.84,17.03h33.19c16.99,0,27.97,10.98,27.97,27.97s-10.98,27.97-27.97,27.97h-17.14l-9.84,17.03h26.98c26.4,0,45-18.6,45-45s-18.6-45-45-45ZM135,162.97c-16.99,0-27.97-10.98-27.97-27.97s10.98-27.97,27.97-27.97h17.14l9.84-17.03h-26.98c-26.4,0-45,18.6-45,45s18.6,45,45,45h23.35l9.84-17.03h-33.19Z"/>
 </svg></div>
         <div style="margin-top:22px"><div class="q-title">EV Charging Project Quote</div><div class="q-subtitle">Prepared for ${S.firstName} ${S.lastName}</div></div>
-             <div class="q-actions">
-      <button class="btn btn-ghost" onclick="savePdf()">Save as PDF</button>
-    </div>
-      <div class="q-meta"><div class="q-id">Quote #${S.quoteId}</div><div class="q-date">${S.quoteDate}</div><div class="q-badge">ESTIMATE</div></div>
-    </div>
       </div>
+      <div class="q-meta">
+        <div class="q-id">Quote #${S.quoteId}</div>
+        <div class="q-date">${S.quoteDate}</div>
+        <div class="q-badge">ESTIMATE</div>
+        <div style="margin-top:14px;">
+          <button class="btn btn-ghost" onclick="savePdf()" style="padding:8px 16px;font-size:.88rem;">Save as PDF</button>
+        </div>
+      </div>
+    </div>
   
     
     <div class="q-sec">
@@ -1626,14 +1877,15 @@ function renderQuote(){
     </div>
 
     <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(3)">Edit ↗</button></div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(7)">Edit ↗</button></div>
       <div class="q-table">
-        <div class="q-row"><div><div class="q-row-name">DC Fast Charging Stations — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era kiosks with integrated retail media display</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
-<div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment','250kw':'250 kW battery energy storage system - Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>      </div>
+        <div class="q-row"><div><div class="q-row-name">${{base:'Base Station (FC200K)',re400:'RE400'}[p.product]||'EV Charging Station'} — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era ${p.product==='re400'?'RE400 with HaloAI — intelligent retail integration':'Base Station'} · hardware, O&M, and software bundle</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
+        <div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'Nexus 125 kW BESS — hardware, O&M bundle · Section 48E tax credits may significantly reduce your net investment','250kw':'Nexus Pro 250 kW BESS — hardware, O&M bundle · Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>
+      </div>
     </div>
 
     <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Electric Era Experiences & Standard O&M</div><button class="q-edit-btn" onclick="goBackFromQuote(7)">Edit ↗</button></div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Electric Era Experiences & Standard O&M</div><button class="q-edit-btn" onclick="goBackFromQuote(11)">Edit ↗</button></div>
       <div class="q-table">
         <div class="q-row"><div><div class="q-row-name">Electric Era Platform${activePrograms.length?' + Retail Programs':''}</div><div class="q-row-desc">${softwareDesc}</div></div><div class="q-price ${p.software>0?'gold':'dim'}">${p.software>0?fmt(p.software)+'/year':'Included'}</div></div>
         ${p.batteryOM>0?`<div class="q-row"><div><div class="q-row-name">Battery O&M</div><div class="q-row-desc">Warranty, maintenance & monitoring for battery energy storage system</div></div><div class="q-price gold">${fmt(p.batteryOM)}/year</div></div>`:''}
@@ -1642,7 +1894,7 @@ function renderQuote(){
 
     ${addonRows.length?`
     <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Add-on Services</div><button class="q-edit-btn" onclick="goBackFromQuote(8)">Edit ↗</button></div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Add-on Services</div><button class="q-edit-btn" onclick="goBackFromQuote(12)">Edit ↗</button></div>
       <div class="q-table">
         ${addonRows.map(([name,desc,price])=>`<div class="q-row"><div><div class="q-row-name">${name}</div><div class="q-row-desc">${desc}</div></div><div class="q-price gold">${price}</div></div>`).join('')}
       </div>
@@ -1689,7 +1941,7 @@ function renderQuote(){
     </div>`:''}
 
     <div class="q-sec">
-      <div class="q-sec-title-row"><div class="q-sec-title">Project Timeline</div><button class="q-edit-btn" onclick="goBackFromQuote(8)">Edit ↗</button></div>
+      <div class="q-sec-title-row"><div class="q-sec-title">Project Timeline</div><button class="q-edit-btn" onclick="goBackFromQuote(12)">Edit ↗</button></div>
       <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:18px 16px 14px;">
         <p style="font-size:11px;color:var(--muted);margin-bottom:14px;font-family:var(--mono);">Estimated schedule anchored to your target completion date. All durations are illustrative and subject to site-specific conditions.</p>
         ${buildGantt(S.startDate)}
@@ -1818,7 +2070,7 @@ function restart(){
   // Re-detect grant from URL param on restart so campaign links stay active
   const urlGrant = new URLSearchParams(window.location.search).get('grant');
   const grantOnRestart = (urlGrant && GRANTS[urlGrant]) ? urlGrant : '';
-  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',sites:[],stalls:4,budget:'',caasProduct:null,caasAnnualFee:0,battery:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
+  Object.assign(S,{reasons:[],firstName:'',lastName:'',email:'',businessType:'',siteAddress:'',sites:[],stalls:4,budget:'',caasProduct:null,caasBattery:null,caasAnnualFee:0,battery:null,dpProduct:null,retailPrograms:[],addDesign:false,addEPC:false,addConstruction:false,addNone:false,startDate:'',grant:grantOnRestart});
   // Clear hash without triggering the hashchange listener
   window.removeEventListener('hashchange', onHashChange);
   document.getElementById('pl-page').classList.remove('on');
@@ -2678,15 +2930,28 @@ function finalizePLPage(geoResult, siteResults, foundCount) {
   const sites = siteResults || [];
   const isPortfolio = sites.length > 1;
 
+  // Avg lifetime utilization: average (sessions/year across 10 years) / max potential sessions/year
+  const maxSessionsPerDay = 30; // 30 sessions/stall/day
+  const numSites = sites.length || 1;
+  const maxSessionsPerYear = maxSessionsPerDay * S.stalls * numSites * 365;
+  let totalSessions10yr = 0;
+  for (let y = 1; y <= 10; y++) {
+    totalSessions10yr += spd * 365 * Math.pow(1 + SESSION_GROWTH_RATE, y - 1);
+  }
+  const avgSessionsPerYear = totalSessions10yr / 10;
+  const avgUtilization = (maxSessionsPerYear > 0) ? Math.min(100, (avgSessionsPerYear / maxSessionsPerYear) * 100) : 0;
+
   const spdEl = document.getElementById('pl-stat-spd');
   const yr1El = document.getElementById('pl-stat-yr1');
   const yr10El = document.getElementById('pl-stat-yr10');
+  const utilEl = document.getElementById('pl-stat-util');
   const siteEl = document.getElementById('pl-site-label');
   const noDataBanner = document.getElementById('pl-no-data-banner');
 
   if (spdEl) spdEl.textContent = spd + (isPortfolio ? ' total' : '');
   if (yr1El) yr1El.textContent = plFmtNum(yr1);
   if (yr10El) yr10El.textContent = plFmtNum(yr10);
+  if (utilEl) utilEl.textContent = isNaN(avgUtilization) ? 'N/A' : avgUtilization.toFixed(1) + '%';
   if (siteEl) siteEl.textContent = PL.siteAddress || 'Custom Site';
 
   // Show no-data banner if any sites had no data
@@ -2795,6 +3060,11 @@ function renderPLShell() {
         <div class="pl-stat-label">Year 10 Sessions</div>
         <div class="pl-stat-value" id="pl-stat-yr10">--</div>
         <div class="pl-stat-sub">Projected (10% annual growth)</div>
+      </div>
+      <div class="pl-stat-card">
+        <div class="pl-stat-label">Avg Lifetime Utilization</div>
+        <div class="pl-stat-value" id="pl-stat-util">--</div>
+        <div class="pl-stat-sub">Avg across 10 yrs (10% YoY growth)</div>
       </div>
     </div>
 
@@ -3074,16 +3344,32 @@ async function loadAndFinalizeCaaSPL() {
   if (loadEl) loadEl.style.display = 'flex';
 
   // Geocode + SPD lookup (portfolio sum)
-  let totalSPD = 0, firstGeo = null;
+  let totalSPD = 0, firstGeo = null, spdSitesFound = 0;
   for (const addr of sites) {
     const r = await lookupSPDForCaaS(addr);
-    totalSPD += r?.spd ?? 20;
+    if (r?.spd != null) { totalSPD += r.spd; spdSitesFound++; }
     if (!firstGeo && r?.lat) firstGeo = r;
     await new Promise(res => setTimeout(res, 1200));
   }
   if (loadEl) loadEl.style.display = 'none';
 
-  // Store for use in compute
+  // If no site has SPD data, show error and bail
+  if (spdSitesFound === 0) {
+    const plEl = document.getElementById('caas-pl-wrap') || document.getElementById('pl-page');
+    const container = plEl || document.body;
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'max-width:560px;margin:60px auto;text-align:center;padding:0 20px;';
+    errDiv.innerHTML = `
+      <div style="font-size:2.2rem;margin-bottom:20px;">📡</div>
+      <h2 style="font-size:1.5rem;font-weight:400;margin-bottom:12px;">Not enough data for your site</h2>
+      <p style="color:var(--muted);font-size:.95rem;line-height:1.5;margin-bottom:24px;">We do not have enough data for your site. Our team can help you with a utilization forecast.</p>
+      <button class="btn btn-ghost" onclick="backToQuoteFromPL()" style="padding:10px 20px;">← Back to Quote</button>`;
+    const statsGrid = document.querySelector('.pl-stats-grid');
+    if (statsGrid) statsGrid.insertAdjacentElement('beforebegin', errDiv);
+    return;
+  }
+
+  // Store for use in compute — use the fee resolved by renderCaaSQuote (with real SPD) if available
   PL.caasAnnualFee = S.caasAnnualFee || 0;
   PL.siteAddress   = sites.length === 1 ? sites[0] : sites.length+'-Site Portfolio';
   const spd = Math.max(5, totalSPD);
@@ -3091,7 +3377,7 @@ async function loadAndFinalizeCaaSPL() {
   // Update stat cards
   const yr1  = Math.round(spd * 365);
   // Avg lifetime utilization: average (sessions/year across 10 years) / max potential sessions/year
-  const maxSessionsPerDay = S.caasProduct === 're400' ? 30 : 16; // RE400: 30/stall/day, Base: 16/stall/day
+  const maxSessionsPerDay = 30; // 30 sessions/stall/day
   const numSites = sites.length || 1;
   const maxSessionsPerYear = maxSessionsPerDay * S.stalls * numSites * 365;
   let totalSessions10yr = 0;
@@ -3152,6 +3438,7 @@ function renderCaaSPLShell() {
       <div class="pl-card-title">CaaS Configuration</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:.85rem;">
         <div><span style="color:var(--muted);">Charger: </span><span style="color:var(--gold);">${productLabel}</span></div>
+        <div><span style="color:var(--muted);">Battery: </span><span style="color:var(--gold);">${{none:'None','125kw':'125 kW Nexus','250kw':'250 kW Nexus Pro',unsure:'TBD'}[S.caasBattery]||'—'}</span></div>
         <div><span style="color:var(--muted);">Stalls: </span><span style="color:var(--gold);">${S.stalls}/site</span></div>
         <div><span style="color:var(--muted);">CaaS fee: </span><span style="color:var(--gold);">$${Math.round(caasAnnual/12).toLocaleString()}/mo · $${Math.round(caasAnnual).toLocaleString()}/yr</span></div>
         <div><span style="color:var(--muted);">Sites: </span><span style="color:var(--gold);">${sites.length}</span></div>
