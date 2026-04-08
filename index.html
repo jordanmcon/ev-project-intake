@@ -850,19 +850,10 @@ async function renderCaaSQuote(qWrap) {
         <div id="caas-fee-annual-line" style="font-size:.78rem;font-family:var(--mono);color:var(--muted);margin-top:5px;">${fmtFee(portAnnual,anyCapped)}/yr · ${fmtFee(port10yr,anyCapped)} over full term</div>
         ${anyEligible ? `
         <div style="margin-top:14px;display:inline-flex;align-items:center;gap:8px;background:rgba(248,185,24,.08);border:1px solid var(--gold-border);border-radius:6px;padding:7px 12px;font-size:.78rem;font-family:var(--mono);">
-          <span style="color:var(--gold);letter-spacing:.05em;">⚡ LCFS CREDITS APPLIED</span>
-          <span style="color:var(--muted);">est. ${fmtC(lcfsReductionRounded)}/yr reduction included in fee</span>
+          <span style="color:var(--gold);letter-spacing:.05em;">⚡ LCFS Included</span>
+
         </div>` : ''}
-        <div style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.09);">
-          <div style="font-size:.68rem;font-family:var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:9px;">Demand Charge Rate</div>
-          <div style="display:flex;align-items:center;gap:14px;">
-            <input type="range" min="0" max="30" step="1" value="0"
-              style="flex:1;accent-color:var(--gold);cursor:pointer;"
-              oninput="updateCaasDemandFee(+this.value)">
-            <span id="caas-demand-label" style="font-family:var(--mono);font-size:.83rem;color:var(--gold);min-width:160px;text-align:right;">$0/kW/mo (no charge)</span>
-          </div>
-          <div style="font-size:.68rem;color:var(--muted);margin-top:5px;">Set your site's demand charge rate. Fee adjusts in real time based on ${fmtC(totalDemandKW)} kW estimated p95 peak demand.</div>
-        </div>
+
       </div>
     </div>
 
@@ -891,7 +882,7 @@ async function renderCaaSQuote(qWrap) {
         <div class="q-row"><span class="q-row-name">Charging stalls</span><span class="q-price">${S.stalls}${anyCapped?'+':''} per site</span></div>
         <div class="q-row"><span class="q-row-name">Sites</span><span class="q-price">${n}</span></div>
         <div class="q-row"><span class="q-row-name">Contract term</span><span class="q-price">10 years · fixed fee, no CapEx</span></div>
-        <div class="q-row"><span class="q-row-name">LCFS eligibility</span><span class="q-price">${anyEligible ? `<span style="color:var(--gold);">✓ Eligible</span> — credits applied to your fee (CA / OR / WA)` : 'Not eligible — site is outside LCFS states'}</span></div>
+        <div class="q-row"><span class="q-row-name">LCFS eligibility</span><span class="q-price">${anyEligible ? `<span style="color:var(--gold);">✓ Eligible</span> : 'Not eligible — site is outside LCFS states'}</span></div>
       </div>
     </div>
 
@@ -899,10 +890,10 @@ async function renderCaaSQuote(qWrap) {
       <div class="q-sec-title">What's included</div>
       <div class="inc-list">
         ${['✓ Hardware procurement & installation: Charger equipment, electrical, and permitting coordination.',
-           '✓ Full-term O&M (10 years): Preventative and corrective maintenance included.',
-           '✓ HaloAI on-charger intelligence: Driver support, remote diagnostics, and retail experience features.',
-           '✓ Network & connectivity: LTE, OCPP compliance, and cloud monitoring.',
-           '✓ No upfront CapEx: Fixed monthly subscription — capital expenditure not required.',
+           '✓ Operations & maintenance: 24/7 NOC, preventative and corrective maintenance included.',
+           '✓ HaloAI on-charger intelligence: Driver support, diagnostics, and retail experience features.',
+           '✓ Network & connectivity: LTE, OCPP, and cloud monitoring.',
+           '✓ No upfront CapEx: Fixed monthly fee -- capital expenditure not required.',
           ].map(t=>`<div class="inc-item"><div class="inc-title">${t}</div></div>`).join('')}
       </div>
     </div>
@@ -1087,9 +1078,9 @@ function hwPerSite(product, ports, battery) {
 
 // Annual recurring Experiences + O&M cost per site per year.
 // Base Station: $14k @ 4 ports, $27k @ 6 ports, $36k @ 8 ports (linearly interpolated/extrapolated).
-// RE400: $14k per port per year.
+// RE400: $12k per port per year.
 function opsPerSite(product, ports) {
-  if (product === 're400') return ports * 14000;
+  if (product === 're400') return ports * 12000;
   if (ports <= 4) return 14000 + (ports - 4) * 6500;
   if (ports <= 6) return 14000 + (ports - 4) * (27000 - 14000) / 2;
   if (ports <= 8) return 27000 + (ports - 6) * (36000 - 27000) / 2;
@@ -1300,7 +1291,7 @@ const SLIDES = [
     <div class="choices" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
       ${[
         ['base',  'Base Station',  '200 kW / port', 'Electric Era Base Station — Reliable EV fast charging.'],
-        ['re400', 'RE400',         '400 kW / port', 'Electric Era RE400 EV fast charging with HaloAI — Intelligent, interactive, and immersive retail integration.'],
+        ['re400', 'RE400',         '400 kW / port', 'Electric Era RE400 with HaloAI — Intelligent, interactive, and immersive retail integration.'],
       ].map(([v,label,kw,desc],i)=>`
         <div class="choice ${S.caasProduct===v?'sel':''}" onclick="S.caasProduct='${v}';this.closest('.choices').querySelectorAll('.choice').forEach(el=>el.classList.remove('sel'));this.classList.add('sel');">
           <div class="ck">${String.fromCharCode(65+i)}</div>
@@ -2141,7 +2132,7 @@ function renderQuote(){
       <div class="q-actions">
       <button class="btn btn-ghost" onclick="restart()" style="font-size:1rem;color:var(--muted);">Start another project</button>
     </div>
-  <div class="q-disclaimer">This price estimate is for planning purposes only and is not a binding offer. Final pricing is subject to site review.</div>
+  <div class="q-disclaimer">This estimate is for planning purposes only and is not a binding offer. Final pricing is subject to site review.</div>
   `;
 }
 
@@ -2723,7 +2714,7 @@ function computeAndRenderPL() {
         html += row(batteryLabel, years.map((y,i) => i === 0 ? -batteryCost : 0));
     }
     html += row('Design &amp; EPC', years.map((y,i) => i === 0 ? -designCost : 0));
-    html += row('Construction Est.', years.map((y,i) => i === 0 ? -constructionCost : 0));
+    html += row('Construction', years.map((y,i) => i === 0 ? -constructionCost : 0));
     
     html += row('Utility Upgrade (estimate)', years.map((y,i) => i === 0 ? -utilityUpgradeCost : 0));
     const capexRow = years.map((y,i) => i === 0 ? -totalCapEx : 0);
@@ -3282,11 +3273,11 @@ function renderPLShell() {
         <div class="pl-slider-group">
           <div class="pl-slider-header">
             <span class="pl-slider-label">Electricity Cost</span>
-            <span class="pl-slider-value" id="valElecPrice">$0.15</span>
+            <span class="pl-slider-value" id="valElecPrice">$0.10</span>
           </div>
           <div class="pl-slider-desc">Your utility cost ($/kWh)</div>
-          <input type="range" class="pl-range" id="sliderElecPrice" min="0.05" max="0.30" step="0.01" value="0.15">
-          <div class="pl-slider-range"><span>$0.05</span><span>$0.30</span></div>
+          <input type="range" class="pl-range" id="sliderElecPrice" min="0.01" max="0.25" step="0.01" value="0.10">
+          <div class="pl-slider-range"><span>$0.01</span><span>$0.25</span></div>
         </div>
 
         <div class="pl-slider-group">
