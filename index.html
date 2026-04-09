@@ -1078,9 +1078,9 @@ function hwPerSite(product, ports, battery) {
 
 // Annual recurring Experiences + O&M cost per site per year.
 // Base Station: $14k @ 4 ports, $27k @ 6 ports, $36k @ 8 ports (linearly interpolated/extrapolated).
-// RE400: $12k per port per year.
+// RE400: $14k per port per year.
 function opsPerSite(product, ports) {
-  if (product === 're400') return ports * 12000;
+  if (product === 're400') return ports * 14000;
   if (ports <= 4) return 14000 + (ports - 4) * 6500;
   if (ports <= 6) return 14000 + (ports - 4) * (27000 - 14000) / 2;
   if (ports <= 8) return 27000 + (ports - 6) * (36000 - 27000) / 2;
