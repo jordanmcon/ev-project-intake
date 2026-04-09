@@ -2044,7 +2044,7 @@ function renderQuote(){
     <div class="q-sec">
       <div class="q-sec-title-row"><div class="q-sec-title">Hardware</div><button class="q-edit-btn" onclick="goBackFromQuote(8)">Edit ↗</button></div>
       <div class="q-table">
-        <div class="q-row"><div><div class="q-row-name">${{base:'Base Station',re400:'RE400'}[p.product]||'EV Charging Station'} — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era ${p.product==='re400'?'RE400 with HaloAI — intelligent retail integration':'Base Station'} · charger hardware &amp; switchgear</div></div><div class="q-price gold">${fmt(p.hardware)}</div></div>
+        <div class="q-row"><div><div class="q-row-name">${{base:'Base Station',re400:'RE400'}[p.product]||'EV Charging Station'} — ${S.stalls} stalls</div><div class="q-row-desc">Electric Era ${p.product==='re400'?'RE400 with HaloAI — intelligent retail integration':'Base Station'} · charger hardware &amp; switchgear</div></div><div class="q-price gold">${fmt(p.hardware)} per site</div></div>
         <div class="q-row"><div><div class="q-row-name">Battery Energy Storage — ${btLabel}</div><div class="q-row-desc">${{none:'Direct grid connection only','125kw':'125 kW BESS — hardware, O&M bundle · Section 48E tax credits may significantly reduce your net investment','250kw':'250 kW BESS — hardware, O&M bundle · Section 48E tax credits may significantly reduce your net investment',unsure:'An Electric Era expert can help you assess the right option for your site'}[S.battery]||''}</div></div><div class="q-price ${p.batteryPrice>0?'gold':'dim'}">${p.batteryPrice>0?fmt(p.batteryPrice):'$0'}</div></div>
       </div>
     </div>
@@ -2052,7 +2052,7 @@ function renderQuote(){
     <div class="q-sec">
       <div class="q-sec-title-row"><div class="q-sec-title">Experiences + O&amp;M</div><button class="q-edit-btn" onclick="goBackFromQuote(12)">Edit ↗</button></div>
       <div class="q-table">
-        <div class="q-row"><div><div class="q-row-name">Experiences + O&amp;M</div><div class="q-row-desc">Annual operations, maintenance, platform software, and HaloAI experiences</div></div><div class="q-price gold">${fmt(p.annualOps)}/year</div></div>
+        <div class="q-row"><div><div class="q-row-name">Experiences + O&amp;M</div><div class="q-row-desc">Annual operations, maintenance, platform software, and HaloAI experiences</div></div><div class="q-price gold">${fmt(p.annualOps)}/year per site</div></div>
       </div>
     </div>
 
@@ -2065,7 +2065,7 @@ function renderQuote(){
     </div>`:''}
 
     <div class="q-total" style="${S.grant ? 'border-bottom-left-radius:4px;border-bottom-right-radius:4px;margin-bottom:0;border-bottom-color:var(--border);' : ''}">
-      <div><div class="qt-label">Estimated Total Investment</div><small>CapEx + Year 1 OpEx</small></div>
+      <div><div class="qt-label">Estimated Total Investment</div><small>CapEx + Year 1 OpEx · per site</small></div>
       <div class="qt-amount">${fmt(p.subtotal)}</div>
     </div>
 
@@ -2452,9 +2452,9 @@ function interpolateGridDraw(spd) {
 }
 
 // ── CORE P&L MATH ────────────────────────────────────────────
-function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, includeUtilityUpgrade, includeLCFS, annualOps) {
+function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, includeUtilityUpgrade, includeLCFS, annualOps, nSites = 1) {
     const UTILITY_UPGRADE_COST = 60000;
-    const utilityUpgradeCost = includeUtilityUpgrade ? UTILITY_UPGRADE_COST : 0;
+    const utilityUpgradeCost = includeUtilityUpgrade ? UTILITY_UPGRADE_COST * nSites : 0;
     const totalCapEx = hardwareCost + designCost + constructionCost + (batteryCost || 0) + utilityUpgradeCost;
 
     // If battery selected, demand charges are mitigated by 75%
@@ -2481,7 +2481,7 @@ function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, const
         const grossChargingRevenue = kwhDelivered * adjChargingPrice;
         const paymentProcessingFee = grossChargingRevenue * PAYMENT_PROCESSING_FEE;
         const netChargingRevenue = grossChargingRevenue - paymentProcessingFee;
-        const lcfsRevenue = includeLCFS ? 20000 : 0;
+        const lcfsRevenue = includeLCFS > 0 ? 20000 * includeLCFS : 0;
 
         // === COSTS ===
         // Energy: kWh drawn from grid includes ~11% round-trip loss (1/0.9 efficiency from XLS)
@@ -2497,7 +2497,7 @@ function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, const
         const opsCost = annualOps != null ? annualOps : 56000;
 
         // Compliance / other fees
-        const complianceCost = COMPLIANCE_FEES_ANNUAL * inflation;
+        const complianceCost = COMPLIANCE_FEES_ANNUAL * inflation * nSites;
 
         const totalOpEx = paymentProcessingFee + energyCost + annualDemandCharge + opsCost;
         const grossProfit = grossChargingRevenue + lcfsRevenue - totalOpEx;
@@ -2597,32 +2597,38 @@ function computeAndRenderPL() {
     const elecCost = parseFloat(document.getElementById('sliderElecPrice').value);
     const demandRate = parseFloat(document.getElementById('sliderDemandRate').value);
 
+    // Portfolio scale factor
+    const nSites = Math.max(1, S.sites.length);
+
     // CapEx from quote (always re-read so edits on quote page auto-update)
     const _p = calcPricing();
-    const hardwareCost    = _p.hardware;
-    const batteryCostQ    = _p.batteryPrice;   // battery from quote
-    const designCost      = _p.design + _p.epc; // Design + EPC add-ons
-    const constructionCost = _p.construction;
-    const annualOps       = _p.annualOps;      // Experiences + O&M from opsPerSite()
+    const hardwareCost    = _p.hardware     * nSites;
+    const batteryCostQ    = _p.batteryPrice * nSites;
+    const designCost      = (_p.design + _p.epc) * nSites;
+    const constructionCost = _p.construction * nSites;
+    const annualOps       = _p.annualOps    * nSites;  // Experiences + O&M for full portfolio
 
-    // Battery via demand checkbox overrides quote battery cost
+    // Battery via demand checkbox overrides quote battery cost (scale per-site cost too)
     const battInfo = PL.plBatterySelected ? getBatteryCost() : null;
-    const batteryCost = battInfo ? battInfo.cost : batteryCostQ;
-    const batteryLabel = battInfo ? battInfo.label : ({236500:'125 kW Battery',276000:'250 kW Battery'}[batteryCostQ]||'');
-    const includeLCFS = isLCFSState();
+    const batteryCost = battInfo ? battInfo.cost * nSites : batteryCostQ;
+    const batteryLabel = battInfo ? battInfo.label : ({236500:'125 kW Battery',276000:'250 kW Battery'}[_p.batteryPrice]||'');
+    // Count LCFS-eligible sites — use geocoded count if available, else fall back to state check
+    const includeLCFS = (PL.lcfsSiteCount != null)
+      ? PL.lcfsSiteCount
+      : (isLCFSState() ? 1 : 0);
 
-    // Update CapEx breakdown card
+    // Update CapEx breakdown card (portfolio totals)
     const breakdownEl = document.getElementById('pl-capex-breakdown');
     const totalEl = document.getElementById('pl-capex-total');
     if (breakdownEl) {
       const rows = [
-        ['Hardware', _p.hardware],
+        ['Hardware', _p.hardware * nSites],
         ...(batteryCostQ > 0 ? [['Battery ('+(batteryLabel||'from quote')+')', batteryCostQ]] : []),
-        ...(_p.design  > 0 ? [['Design Services', _p.design]] : []),
-        ...(_p.epc     > 0 ? [['EPC Management', _p.epc]] : []),
-        ...(_p.construction > 0 ? [['Construction', _p.construction]] : []),
+        ...(_p.design  > 0 ? [['Design Services', _p.design * nSites]] : []),
+        ...(_p.epc     > 0 ? [['EPC Management', _p.epc * nSites]] : []),
+        ...(_p.construction > 0 ? [['Construction', _p.construction * nSites]] : []),
       ];
-      const totalCapExDisplay = rows.reduce((a,[,v])=>a+v,0) + (battInfo ? battInfo.cost - batteryCostQ : 0);
+      const totalCapExDisplay = rows.reduce((a,[,v])=>a+v,0) + (battInfo ? (battInfo.cost - _p.batteryPrice) * nSites : 0);
       breakdownEl.innerHTML = rows.map(([label, val]) =>
         `<div style="display:flex;justify-content:space-between;font-size:.85rem;padding:4px 0;border-bottom:1px solid var(--border);">
           <span style="color:var(--dim);">${label}</span>
@@ -2632,7 +2638,7 @@ function computeAndRenderPL() {
       if (totalEl) totalEl.textContent = '$'+Math.round(totalCapExDisplay).toLocaleString('en-US');
     }
 
-    const result = computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, true, includeLCFS, annualOps);
+    const result = computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, true, includeLCFS, annualOps, nSites);
     const { years, totalCapEx, irr, breakeven, utilityUpgradeCost } = result;
 
     // Summary metrics
@@ -2693,7 +2699,7 @@ function computeAndRenderPL() {
     html += sectionRow('REVENUE <span class="section-note">EV charging also drives incremental retail revenue—<a href="https://electricera.tech/app/retail-experience-value-calculator" target="_blank" style="color:#F8B918;">find out how much</a></span>');
     html += row('Total Charging Revenue', years.map(y => y.grossChargingRevenue), 'subtotal');
     if (includeLCFS) {
-        html += row('LCFS Credits', years.map(() => 20000));
+        html += row('LCFS Credits', years.map(y => y.lcfsRevenue));
     }
 
     // Costs
@@ -3076,12 +3082,19 @@ async function showPLPage() {
   }, 0);
   const foundCount = siteResults.filter(s => s.result && s.result.spd !== null).length;
 
-  PL.spd = Math.max(5, Math.min(100 * sites.length, totalSPD));
+  PL.spd = Math.max(5, Math.min(500 * sites.length, totalSPD));
   PL.siteAddress = sites.length === 1 ? sites[0] : sites.length + '-Site Portfolio';
 
   // Use first geocoded result for map + state
   const firstGeo = siteResults.find(s => s.result && s.result.lat)?.result || null;
   if (firstGeo) PL.lastState = firstGeo.state || '';
+
+  // Count LCFS-eligible sites using geocoded state data (more reliable than address parsing)
+  const LCFS_STATES_SET = ['ca','or','wa','california','oregon','washington'];
+  PL.lcfsSiteCount = siteResults.filter(s => {
+    const st = (s.result?.state || '').toLowerCase().trim();
+    return LCFS_STATES_SET.includes(st);
+  }).length;
 
   finalizePLPage(firstGeo, siteResults, foundCount);
 }
@@ -3161,12 +3174,11 @@ function finalizePLPage(geoResult, siteResults, foundCount) {
   // Session chart
   renderSessionChart(spd);
 
-  // Set SPD slider — clamp to slider max (100) for display, but use full portfolio SPD for math
-  const sliderMax = isPortfolio ? Math.min(spd, 100) : spd;
+  // Set SPD slider — max is 500, but expand dynamically if SPD exceeds it
   const spdSlider = document.getElementById('sliderSPD');
   const spdVal = document.getElementById('valSPD');
   if (spdSlider) {
-    spdSlider.max = isPortfolio ? Math.max(100, spd * 1.5) : 100;
+    spdSlider.max = Math.max(500, spd * 1.5);
     spdSlider.value = spd;
     if (spdVal) spdVal.textContent = spd;
   }
@@ -3257,8 +3269,8 @@ function renderPLShell() {
             <span class="pl-slider-value" id="valSPD">--</span>
           </div>
           <div class="pl-slider-desc">Baseline daily charging sessions (Year 1) — pre-filled from Paren data</div>
-          <input type="range" class="pl-range" id="sliderSPD" min="5" max="100" step="1" value="20" oninput="this.max=Math.max(parseInt(this.max),parseInt(this.value));">
-          <div class="pl-slider-range"><span>5</span><span>100</span></div>
+          <input type="range" class="pl-range" id="sliderSPD" min="5" max="500" step="1" value="20" oninput="this.max=Math.max(parseInt(this.max),parseInt(this.value));">
+          <div class="pl-slider-range"><span>5</span><span>500</span></div>
         </div>
 
         <div class="pl-slider-group">
@@ -3559,7 +3571,7 @@ async function loadAndFinalizeCaaSPL() {
 
   // Set sliders
   const spdSlider = document.getElementById('caas-sliderSPD');
-  if (spdSlider) { spdSlider.max = Math.max(100, spd*1.5); spdSlider.value = spd; }
+  if (spdSlider) { spdSlider.max = Math.max(500, spd*1.5); spdSlider.value = spd; }
 
   // Map — only show for single site
   const mapCard = document.getElementById('caas-map-card');
@@ -3623,8 +3635,8 @@ function renderCaaSPLShell() {
         <div class="pl-slider-group">
           <div class="pl-slider-header"><span class="pl-slider-label">Sessions / Day</span><span class="pl-slider-value" id="caas-valSPD">--</span></div>
           <div class="pl-slider-desc">Year 1 baseline (pre-filled from Paren data)</div>
-          <input type="range" class="pl-range" id="caas-sliderSPD" min="5" max="100" step="1" value="20">
-          <div class="pl-slider-range"><span>5</span><span>100</span></div>
+          <input type="range" class="pl-range" id="caas-sliderSPD" min="5" max="500" step="1" value="20">
+          <div class="pl-slider-range"><span>5</span><span>500</span></div>
         </div>
         <div class="pl-slider-group">
           <div class="pl-slider-header"><span class="pl-slider-label">Charging Price</span><span class="pl-slider-value" id="caas-valChargingPrice">$0.50</span></div>
