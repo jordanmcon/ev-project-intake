@@ -1053,6 +1053,12 @@ const S = {
   }
 })();
 
+// ── ADD-ON SERVICE COSTS (shared by DP and CaaS) ─────────────
+const COST_DESIGN           = 31500;   // Design services
+const COST_EPC              = 40000;   // EPC management
+const COST_CONSTRUCTION     = 164500;  // Construction
+const COST_UTILITY_UPGRADE  = 60000;   // Utility upgrade (estimate)
+
 // ── DIRECT PURCHASE PRICING ───────────────────────────────────
 // Hardware cost per site (charger units, switchgear, cabinet, shipping).
 // Base Station: switchgear ($17k) + ceil(ports/2) charger units ($65k ea) + shipping ($6k)
@@ -1100,9 +1106,9 @@ function calcPricing() {
   // Annual retail add-on programs (RE400 only; Base Station ops include platform)
   const ratePerPort = product === 're400' ? ([14000, 14000, 18000, 28000][n] || 0) : 0;
   const software    = ratePerPort * S.stalls;
-  const design = S.addDesign ? 31500 : 0;
-  const epc    = S.addEPC ? 40000 : 0;
-  const construction = S.addConstruction ? 164500 : 0;
+  const design = S.addDesign ? COST_DESIGN : 0;
+  const epc    = S.addEPC ? COST_EPC : 0;
+  const construction = S.addConstruction ? COST_CONSTRUCTION : 0;
   const subtotal = hardware + batteryPrice + batteryOM + design + epc + construction;
   return { hardware, software, batteryPrice, batteryOM, annualOps, design, epc, construction, subtotal, ratePerPort, n, product };
 }
@@ -2453,8 +2459,7 @@ function interpolateGridDraw(spd) {
 
 // ── CORE P&L MATH ────────────────────────────────────────────
 function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, includeUtilityUpgrade, includeLCFS, annualOps, nSites = 1) {
-    const UTILITY_UPGRADE_COST = 60000;
-    const utilityUpgradeCost = includeUtilityUpgrade ? UTILITY_UPGRADE_COST * nSites : 0;
+    const utilityUpgradeCost = includeUtilityUpgrade ? COST_UTILITY_UPGRADE * nSites : 0;
     const totalCapEx = hardwareCost + designCost + constructionCost + (batteryCost || 0) + utilityUpgradeCost;
 
     // If battery selected, demand charges are mitigated by 75%
@@ -2641,6 +2646,11 @@ function computeAndRenderPL() {
     const result = computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, true, includeLCFS, annualOps, nSites);
     const { years, totalCapEx, irr, breakeven, utilityUpgradeCost } = result;
 
+    // Bonus depreciation — 100% first-year federal depreciation × 21% corporate tax rate
+    const grantOffset     = calcGrantDeduction(_p.subtotal) * nSites;
+    const eligibleForDepr = Math.max(0, (hardwareCost + batteryCost + designCost + constructionCost + utilityUpgradeCost) - grantOffset);
+    const bonusDepr       = eligibleForDepr * 0.21;
+
     // Summary metrics
     const totalRevenue = years.reduce((s,y) => s + y.grossChargingRevenue + y.lcfsRevenue, 0);
     const totalNetRevenue = years.reduce((s,y) => s + y.netChargingRevenue, 0);
@@ -2725,12 +2735,13 @@ function computeAndRenderPL() {
     
     html += row('Utility Upgrade (estimate)', years.map((y,i) => i === 0 ? -utilityUpgradeCost : 0));
     const capexRow = years.map((y,i) => i === 0 ? -totalCapEx : 0);
-    html += row('Total CapEx (Year 0)', capexRow, 'subtotal');
+    html += row('Total CapEx', capexRow, 'subtotal');
+    html += row('Bonus Depreciation', years.map((y,i) => i === 0 ? bonusDepr : 0), 'pos-row');
 
     // Cumulative CF
     html += sectionRow('CASH FLOW');
     let cum = -totalCapEx;
-    const cumCFs = years.map(y => { cum += y.cashFlow; return cum; });
+    const cumCFs = years.map((y,i) => { cum += y.cashFlow + (i === 0 ? bonusDepr : 0); return cum; });
     html += row('Cumulative Free Cash Flow', cumCFs, 'grand-total', fmtCurrencyFull, true);
 
     tbody.innerHTML = html;
@@ -2738,7 +2749,7 @@ function computeAndRenderPL() {
     // Cumulative Free Cash Flow Chart
     const cfLabels = years.map(y => `Year ${y.y}`);
     let cumCFChart = -totalCapEx;
-    const cumCFData = years.map(y => { cumCFChart += y.cashFlow; return Math.round(cumCFChart); });
+    const cumCFData = years.map((y,i) => { cumCFChart += y.cashFlow + (i === 0 ? bonusDepr : 0); return Math.round(cumCFChart); });
 
     const cashflowCtx = document.getElementById('cashflowChart').getContext('2d');
     if (window._cashflowChart instanceof Chart) window._cashflowChart.destroy();
@@ -3463,6 +3474,15 @@ function computeAndRenderCaaSPL() {
   }
   function sRow(label) { return `<tr class="section-header"><td colspan="12">${label}</td></tr>`; }
 
+  // Bonus depreciation — hardware + services cost basis (CaaS customer owns equipment)
+  const caasNSites        = Math.max(1, S.sites.length);
+  const caasHwPerSite     = hwPerSite(S.caasProduct || 'base', S.stalls, S.caasBattery || 'none');
+  const caasServicesPerSite = COST_DESIGN + COST_EPC + COST_CONSTRUCTION + COST_UTILITY_UPGRADE;
+  const caasEligiblePerSite = caasHwPerSite + caasServicesPerSite;
+  const caasGrantOffset   = calcGrantDeduction(caasEligiblePerSite) * caasNSites;
+  const caasEligibleDepr  = Math.max(0, caasEligiblePerSite * caasNSites - caasGrantOffset);
+  const caasBonusDepr     = caasEligibleDepr * 0.21;
+
   let html = '';
   html += sRow('REVENUE');
   html += row('Gross charging revenue', r.years.map(y=>y.grossRevenue));
@@ -3472,14 +3492,15 @@ function computeAndRenderCaaSPL() {
   html += row('Electricity cost',       r.years.map(y=>-y.energyCost));
   html += row('CaaS subscription fee',  r.years.map(y=>-y.caasOpEx));
   html += sRow('NET PROFIT');
+  html += row('Bonus Depreciation (Year 1)', r.years.map((_,i) => i===0 ? caasBonusDepr : 0), 'pos-row');
   html += row('Net operating profit',   r.years.map(y=>y.netProfit), 'grand-total', fmtCurrencyFull, true);
   tbody.innerHTML = html;
 
-  // Cash flow chart
+  // Cash flow chart — includes bonus depreciation in Year 1
   const cfCtx = document.getElementById('caas-cashflowChart').getContext('2d');
   if (window._caasCFChart instanceof Chart) window._caasCFChart.destroy();
   let cum = 0;
-  const cumData = r.years.map(y => { cum += y.netProfit; return Math.round(cum); });
+  const cumData = r.years.map((y,i) => { cum += y.netProfit + (i===0 ? caasBonusDepr : 0); return Math.round(cum); });
   window._caasCFChart = new Chart(cfCtx, {
     type: 'line',
     data: {
