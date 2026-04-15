@@ -577,6 +577,46 @@ const CAAS_TABLE = {
 const CAAS_TABLE_SPDS = [10, 15, 20, 25, 30, 35, 40, 45, 50];
 const CAAS_BATTERY_MAP = { none:'none', '125kw':'nexus', '250kw':'nexus_pro', unsure:'none' };
 
+// ── LCFS CALCULATION CONSTANTS (from EE + MN8 CaaS Calculator V3, LCFS tab) ──
+// Throughput credits: (CI_gasoline - CA_grid_CI/EER_gasoline) × EER_EV × C × 1000
+// Constants: EER_gasoline=3.4, EER_EV=5, C=1e-6
+// credits/MWh declines ~2.3%/yr as CA grid decarbonizes (CI declines)
+// Year 1 baseline = 1.0687 credits/MWh @ 10 SPD / 35 kWh/session
+const LCFS_CPM_BASE  = 1.0687;   // credits per MWh delivered, Year 1
+const LCFS_CPM_DECAY = 0.0231;   // annual decline rate in credits/MWh
+// FCI credits: CA-only, capacity-based, per charger per year. Calibrated for 400kW (RE400).
+// Base Station (200kW) earns half. Scale by chargerKw/400.
+// Values from LCFS tab row 42, years 1-10 (RE400 baseline):
+const LCFS_FCI_CPY = [193.92, 187.43, 180.83, 174.11, 167.28, 154.20, 141.22, 128.37, 115.66, 103.19];
+
+// LCFS credit price schedules (from EE + MN8 CaaS Calculator V3, LCFS tab)
+// CA: $65/credit 2025-2029, $60 in 2030, $40 in 2031, $20 2032+
+// OR: $30/credit flat 2025-2045
+// WA: $25/credit 2025-2030, $20/credit 2031+
+function _lcfsCreditPrice(state, year) {
+  if (state === 'ca') return year <= 2029 ? 65 : year === 2030 ? 60 : year === 2031 ? 40 : 20;
+  if (state === 'or') return 30;
+  if (state === 'wa') return year <= 2030 ? 25 : 20;
+  return 0;
+}
+
+// Compute OR and WA fee-scaling factors relative to CA, based on the NPV of each
+// state's 10-year LCFS credit price stream at a 10% discount rate.
+// Called at fee-lookup time using the deal's target start year so the factors
+// stay accurate as the CA price schedule steps down over time.
+function getLCFSFactors() {
+  const startYear = (S.startDate ? parseInt(S.startDate) : new Date().getFullYear());
+  let ca = 0, or = 0, wa = 0;
+  for (let i = 1; i <= 10; i++) {
+    const df = Math.pow(1.10, i);
+    const y  = startYear + i - 1;
+    ca += _lcfsCreditPrice('ca', y) / df;
+    or += _lcfsCreditPrice('or', y) / df;
+    wa += _lcfsCreditPrice('wa', y) / df;
+  }
+  return ca > 0 ? { or: or / ca, wa: wa / ca } : { or: 0.595, wa: 0.470 };
+}
+
 // ── DEMAND TABLE ──────────────────────────────────────────────
 // p95 peak demand (kW) per site at each SPD index [10,15,20,25,30,35,40,45,50].
 // base values are re400 × 0.5 (200 kW vs 400 kW charger power).
@@ -610,7 +650,10 @@ const LCFS_STATES_CAAS = ['CA','OR','WA','CALIFORNIA','OREGON','WASHINGTON'];
 
 function isLCFSEligibleCaaS(address) {
   const u = address.toUpperCase();
-  return LCFS_STATES_CAAS.some(s => new RegExp('\\b'+s+'\\b').test(u));
+  if (/\b(CA|CALIFORNIA)\b/.test(u)) return 'ca';
+  if (/\b(OR|OREGON)\b/.test(u))     return 'or';
+  if (/\b(WA|WASHINGTON)\b/.test(u)) return 'wa';
+  return null;
 }
 
 function snapStalls(stalls) {
@@ -629,18 +672,29 @@ function snapSPDIndex(spd) {
   return 0;
 }
 
-// Direct table lookup — no dynamic LCFS calculation.
-function lookupFee(product, stalls, lcfsEligible, spd, battery) {
-  const capped  = stalls > 8;
-  const ports   = snapStalls(capped ? 8 : stalls);
-  const batKey  = CAAS_BATTERY_MAP[battery] || 'none';
-  const lcfsKey = lcfsEligible ? 'on' : 'off';
-  const row     = CAAS_TABLE[product]?.[batKey]?.[lcfsKey]?.[ports]
-               || CAAS_TABLE.base.none.off[8];
-
+// Direct table lookup. lcfsState: 'ca' | 'or' | 'wa' | null/false.
+// OR and WA fees are derived from the CA table using LCFS NPV scaling factors.
+function lookupFee(product, stalls, lcfsState, spd, battery) {
+  const capped = stalls > 8;
+  const ports  = snapStalls(capped ? 8 : stalls);
+  const batKey = CAAS_BATTERY_MAP[battery] || 'none';
   const idx    = spd != null ? snapSPDIndex(spd) : 4; // SPD 30 as fallback
-  const annual = Math.round(row[idx] / 1000) * 1000;
+  const tbl    = CAAS_TABLE[product]?.[batKey] || CAAS_TABLE.base.none;
 
+  const rawOff  = tbl.off?.[ports]?.[idx] ?? CAAS_TABLE.base.none.off[8][idx];
+  const rawCaOn = tbl.on?.[ports]?.[idx]  ?? rawOff;
+  const caReduction = rawOff - rawCaOn;
+
+  const { or: orFactor, wa: waFactor } = getLCFSFactors();
+  let rawFee;
+  if      (!lcfsState)         rawFee = rawOff;
+  else if (lcfsState === 'ca') rawFee = rawCaOn;
+  else if (lcfsState === 'or') rawFee = rawOff - caReduction * orFactor;
+  else if (lcfsState === 'wa') rawFee = rawOff - caReduction * waFactor;
+  else                         rawFee = rawOff;
+
+  const annual = Math.round(rawFee / 1000) * 1000;
+  const lcfsEligible = !!lcfsState;
   return { annual, monthly: annual / 12, total10: annual * 10,
            lcfs: lcfsEligible, capped, snapStalls: ports,
            snappedSpd: CAAS_TABLE_SPDS[idx] };
@@ -734,11 +788,12 @@ async function renderCaaSQuote(qWrap) {
   const siteResults = [];
   for (const addr of sites) {
     const r = await lookupSPDForCaaS(addr);
-    const eligible = isLCFSEligibleCaaS(addr);
+    const lcfsState = isLCFSEligibleCaaS(addr);
+    const eligible  = !!lcfsState;
     const spd = (r && r.spd != null) ? r.spd : null;
-    const fee = spd !== null ? lookupFee(S.caasProduct, S.stalls, eligible, spd, S.caasBattery) : null;
+    const fee = spd !== null ? lookupFee(S.caasProduct, S.stalls, lcfsState, spd, S.caasBattery) : null;
     const demandKw = spd !== null ? lookupDemandKW(S.caasProduct, S.stalls, spd, S.caasBattery) : 0;
-    siteResults.push({ address:addr, spd, eligible, fee, hasData: spd !== null, demandKw });
+    siteResults.push({ address:addr, spd, lcfsState, eligible, fee, hasData: spd !== null, demandKw });
     await new Promise(resolve => setTimeout(resolve, 1200));
   }
 
@@ -1950,8 +2005,8 @@ async function showQuote(){
   if(S.budget==='financed'){
     // Pre-compute indicative CaaS fee for HubSpot
     const _sites = S.sites.length ? S.sites : (S.siteAddress ? [S.siteAddress] : []);
-    const _eligible = _sites.length ? isLCFSEligibleCaaS(_sites[0]) : false;
-    const _fee = lookupFee(S.caasProduct||'base', S.stalls, _eligible, null, S.caasBattery);
+    const _lcfsState = _sites.length ? isLCFSEligibleCaaS(_sites[0]) : null;
+    const _fee = lookupFee(S.caasProduct||'base', S.stalls, _lcfsState, null, S.caasBattery);
     S.caasAnnualFee = Math.round(_fee.annual * Math.max(1, _sites.length));
     try { await submitToHubSpot(); } catch(err){ console.error('HubSpot error:',err); }
     window.location.hash='quote';
@@ -2458,7 +2513,22 @@ function interpolateGridDraw(spd) {
 }
 
 // ── CORE P&L MATH ────────────────────────────────────────────
-function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, includeUtilityUpgrade, includeLCFS, annualOps, nSites = 1) {
+// Compute LCFS revenue for one year based on actual kWh throughput.
+// yearIndex: 0-based (0 = Year 1). state: 'ca'|'or'|'wa'. calYear: calendar year.
+// numChargers = ports / 2 (RE400 dual-port units; Base Station uses same ratio).
+function _lcfsYearRevenue(kwhDelivered, yearIndex, state, calYear, numChargers, chargerKw) {
+  const price = _lcfsCreditPrice(state, calYear);
+  // Throughput credits: credits/MWh decays as CA grid decarbonizes
+  const cpm = LCFS_CPM_BASE * Math.pow(1 - LCFS_CPM_DECAY, yearIndex);
+  const throughputCredits = cpm * (kwhDelivered / 1000); // kWh → MWh
+  // FCI credits: CA only. Calibrated for 400kW RE400 — scale proportionally for other charger sizes.
+  const fciCredits = state === 'ca'
+    ? LCFS_FCI_CPY[Math.min(yearIndex, LCFS_FCI_CPY.length - 1)] * numChargers * (chargerKw / 400)
+    : 0;
+  return (throughputCredits + fciCredits) * price;
+}
+
+function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, includeUtilityUpgrade, includeLCFS, annualOps, nSites = 1, lcfsState = null, startYear = null) {
     const utilityUpgradeCost = includeUtilityUpgrade ? COST_UTILITY_UPGRADE * nSites : 0;
     const totalCapEx = hardwareCost + designCost + constructionCost + (batteryCost || 0) + utilityUpgradeCost;
 
@@ -2486,7 +2556,14 @@ function computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, const
         const grossChargingRevenue = kwhDelivered * adjChargingPrice;
         const paymentProcessingFee = grossChargingRevenue * PAYMENT_PROCESSING_FEE;
         const netChargingRevenue = grossChargingRevenue - paymentProcessingFee;
-        const lcfsRevenue = includeLCFS > 0 ? 20000 * includeLCFS : 0;
+        // LCFS revenue: throughput (kWh-based) + FCI (capacity-based), per eligible site
+        const calYear = (startYear || new Date().getFullYear()) + (y - 1);
+        const numChargers = Math.max(1, Math.round(S.stalls / 2));
+        const chargerKw = (S.dpProduct || S.caasProduct) === 're400' ? 400 : 200;
+        const lcfsPerSite = (includeLCFS > 0 && lcfsState)
+          ? _lcfsYearRevenue(kwhDelivered / nSites, y - 1, lcfsState, calYear, numChargers, chargerKw)
+          : 0;
+        const lcfsRevenue = lcfsPerSite * includeLCFS;
 
         // === COSTS ===
         // Energy: kWh drawn from grid includes ~11% round-trip loss (1/0.9 efficiency from XLS)
@@ -2622,6 +2699,18 @@ function computeAndRenderPL() {
       ? PL.lcfsSiteCount
       : (isLCFSState() ? 1 : 0);
 
+    // Determine dominant LCFS state for credit pricing (use first eligible geocoded site)
+    const LCFS_STATES_SET = ['ca','or','wa','california','oregon','washington'];
+    const firstLCFSSite = (PL.allSiteResults || []).find(s => {
+      const st = (s.result?.state || '').toLowerCase().trim();
+      return LCFS_STATES_SET.includes(st);
+    });
+    const lcfsState = firstLCFSSite
+      ? (['california','ca'].includes((firstLCFSSite.result.state||'').toLowerCase()) ? 'ca'
+       : ['oregon','or'].includes((firstLCFSSite.result.state||'').toLowerCase()) ? 'or' : 'wa')
+      : (isLCFSState() ? (PL.lastState?.toLowerCase().startsWith('or') ? 'or' : PL.lastState?.toLowerCase().startsWith('wa') ? 'wa' : 'ca') : null);
+    const startYear = S.startDate ? parseInt(S.startDate) : new Date().getFullYear();
+
     // Update CapEx breakdown card (portfolio totals)
     const breakdownEl = document.getElementById('pl-capex-breakdown');
     const totalEl = document.getElementById('pl-capex-total');
@@ -2643,7 +2732,7 @@ function computeAndRenderPL() {
       if (totalEl) totalEl.textContent = '$'+Math.round(totalCapExDisplay).toLocaleString('en-US');
     }
 
-    const result = computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, true, includeLCFS, annualOps, nSites);
+    const result = computePL(spd, chargingPrice, elecCost, hardwareCost, designCost, constructionCost, demandRate, batteryCost, true, includeLCFS, annualOps, nSites, lcfsState, startYear);
     const { years, totalCapEx, irr, breakeven, utilityUpgradeCost } = result;
 
     // Bonus depreciation — 100% first-year federal depreciation × 21% corporate tax rate
@@ -2735,8 +2824,8 @@ function computeAndRenderPL() {
     
     html += row('Utility Upgrade (estimate)', years.map((y,i) => i === 0 ? -utilityUpgradeCost : 0));
     const capexRow = years.map((y,i) => i === 0 ? -totalCapEx : 0);
-    html += row('Total CapEx', capexRow, 'subtotal');
-    html += row('Bonus Depreciation', years.map((y,i) => i === 0 ? bonusDepr : 0), 'pos-row');
+    html += row('Total CapEx (Year 0)', capexRow, 'subtotal');
+    html += row('Bonus Depreciation (Year 1)', years.map((y,i) => i === 0 ? bonusDepr : 0), 'pos-row');
 
     // Cumulative CF
     html += sectionRow('CASH FLOW');
