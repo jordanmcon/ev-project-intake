@@ -81,9 +81,9 @@ export default async function handler(req, res) {
     if (dealProperties && contactId) {
 
       // 3a. Resolve deal owner: look up the contact's associated company owner.
-      //     Falls back to Monica Jurgen's owner ID if no company or company owner is found.
-const MONICA_JURGENS_OWNER_ID = '91611405';
-let resolvedOwnerId = MONICA_JURGENS_OWNER_ID;
+      //     Falls back to Jeremy Fischer's owner ID if no company or company owner is found.
+const JEREMY_FISCHER_OWNER_ID = '85540842';
+let resolvedOwnerId = JEREMY_FISCHER_OWNER_ID;
 
       try {
         // Fetch companies associated with this contact
